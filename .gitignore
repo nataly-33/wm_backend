@@ -54,3 +54,6 @@ firebase-service-account.json
 .env.deployment
 .env.production
 application-local.properties
+
+postman
+.postman/
