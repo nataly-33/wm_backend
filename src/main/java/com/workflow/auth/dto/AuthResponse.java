@@ -15,5 +15,6 @@ public class AuthResponse {
     private String nombre;
     private String email;
     private String rol;
+    private String empresaId;
     private String departamentoId; // null si es Admin General
 }
