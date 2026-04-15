@@ -29,9 +29,10 @@ public class UsuarioService {
             throw new RuntimeException("Rol inválido. Debe ser ADMIN_DEPARTAMENTO o FUNCIONARIO");
         }
 
-        // Validar departamento si es FUNCIONARIO
-        if (request.getRol().equals("FUNCIONARIO") && (request.getDepartamentoId() == null || request.getDepartamentoId().isEmpty())) {
-            throw new RuntimeException("Departamento requerido para FUNCIONARIO");
+        // Validar departamento para roles de departamento
+        if ((request.getRol().equals("FUNCIONARIO") || request.getRol().equals("ADMIN_DEPARTAMENTO"))
+                && (request.getDepartamentoId() == null || request.getDepartamentoId().isEmpty())) {
+            throw new RuntimeException("Departamento requerido para ADMIN_DEPARTAMENTO y FUNCIONARIO");
         }
 
         Usuario usuario = Usuario.builder()
