@@ -19,7 +19,7 @@ public class DepartamentoController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<DepartamentoResponse>> crearDepartamento(
-            @RequestHeader("X-Empresa-Id") String empresaId,
+            @RequestAttribute("X-Empresa-Id") String empresaId,
             @RequestBody CrearDepartamentoRequest request) {
         DepartamentoResponse response = departamentoService.crearDepartamento(empresaId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -28,14 +28,14 @@ public class DepartamentoController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<DepartamentoResponse>>> listarDepartamentos(
-            @RequestHeader("X-Empresa-Id") String empresaId) {
+            @RequestAttribute("X-Empresa-Id") String empresaId) {
         List<DepartamentoResponse> response = departamentoService.listarDepartamentos(empresaId);
         return ResponseEntity.ok(ApiResponse.success("Departamentos obtenidos", response));
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<DepartamentoResponse>> obtenerDepartamento(
-            @RequestHeader("X-Empresa-Id") String empresaId,
+            @RequestAttribute("X-Empresa-Id") String empresaId,
             @PathVariable String id) {
         DepartamentoResponse response = departamentoService.obtenerDepartamento(empresaId, id);
         return ResponseEntity.ok(ApiResponse.success("Departamento obtenido", response));
@@ -43,7 +43,7 @@ public class DepartamentoController {
 
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<DepartamentoResponse>> actualizarDepartamento(
-            @RequestHeader("X-Empresa-Id") String empresaId,
+            @RequestAttribute("X-Empresa-Id") String empresaId,
             @PathVariable String id,
             @RequestBody CrearDepartamentoRequest request) {
         DepartamentoResponse response = departamentoService.actualizarDepartamento(empresaId, id, request);
@@ -52,7 +52,7 @@ public class DepartamentoController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<ApiResponse<Void>> eliminarDepartamento(
-            @RequestHeader("X-Empresa-Id") String empresaId,
+            @RequestAttribute("X-Empresa-Id") String empresaId,
             @PathVariable String id) {
         departamentoService.eliminarDepartamento(empresaId, id);
         return ResponseEntity.ok(ApiResponse.success("Departamento eliminado", null));

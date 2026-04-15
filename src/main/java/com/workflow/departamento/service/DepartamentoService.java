@@ -21,7 +21,10 @@ public class DepartamentoService {
         depto.setEmpresaId(empresaId);
         depto.setNombre(request.getNombre());
         depto.setDescripcion(request.getDescripcion());
-        depto.setAdminDepartamentoId(request.getAdminDepartamentoId());
+        
+        String adminId = request.getAdminDepartamentoId();
+        depto.setAdminDepartamentoId((adminId != null && !adminId.trim().isEmpty()) ? adminId : null);
+        
         depto.setActivo(true);
         depto.setCreadoEn(LocalDateTime.now());
 
@@ -35,7 +38,9 @@ public class DepartamentoService {
 
         depto.setNombre(request.getNombre());
         depto.setDescripcion(request.getDescripcion());
-        depto.setAdminDepartamentoId(request.getAdminDepartamentoId());
+        
+        String adminId = request.getAdminDepartamentoId();
+        depto.setAdminDepartamentoId((adminId != null && !adminId.trim().isEmpty()) ? adminId : null);
 
         Departamento updated = departamentoRepository.save(depto);
         return DepartamentoResponse.fromEntity(updated);
@@ -44,7 +49,8 @@ public class DepartamentoService {
     public void eliminarDepartamento(String empresaId, String deptoId) {
         Departamento depto = departamentoRepository.findByIdAndEmpresaId(deptoId, empresaId)
             .orElseThrow(() -> new RuntimeException("Departamento no encontrado"));
-        departamentoRepository.delete(depto);
+        depto.setActivo(false);
+        departamentoRepository.save(depto);
     }
 
     public DepartamentoResponse obtenerDepartamento(String empresaId, String deptoId) {
@@ -54,7 +60,7 @@ public class DepartamentoService {
     }
 
     public List<DepartamentoResponse> listarDepartamentos(String empresaId) {
-        return departamentoRepository.findByEmpresaId(empresaId).stream()
+        return departamentoRepository.findByEmpresaIdAndActivo(empresaId, true).stream()
             .map(DepartamentoResponse::fromEntity)
             .collect(Collectors.toList());
     }
