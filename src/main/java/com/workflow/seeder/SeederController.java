@@ -14,18 +14,13 @@ import org.springframework.web.bind.annotation.RestController;
 public class SeederController {
     private final SeederService seederService;
 
-    @PostMapping("/day4/seed")
-    public ResponseEntity<ApiResponse<String>> seedDia4() {
-        return ResponseEntity.ok(ApiResponse.success("Seeder ejecutado", seederService.seedDia4()));
+    @PostMapping("/run")
+    public ResponseEntity<ApiResponse<String>> runSeeder() {
+        return ResponseEntity.ok(ApiResponse.success("Seeder ejecutado con éxito", seederService.seedAll()));
     }
 
-    @PostMapping("/dia6")
-    public ResponseEntity<ApiResponse<String>> seedDia6() {
-        return ResponseEntity.ok(ApiResponse.success("Seeder dia 6 ejecutado", seederService.seedDia6()));
-    }
-
-    @DeleteMapping("/day4/clear")
-    public ResponseEntity<ApiResponse<String>> clearDia4() {
-        return ResponseEntity.ok(ApiResponse.success("Datos eliminados", seederService.clearAll()));
+    @DeleteMapping("/clear")
+    public ResponseEntity<ApiResponse<String>> clearSeeder() {
+        return ResponseEntity.ok(ApiResponse.success("Datos eliminados correctamente", seederService.clearAll()));
     }
 }
