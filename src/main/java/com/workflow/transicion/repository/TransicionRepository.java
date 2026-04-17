@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface TransicionRepository extends MongoRepository<Transicion, String> {
     List<Transicion> findByPoliticaIdAndActivoTrue(String politicaId);
+    List<Transicion> findByNodoOrigenId(String nodoOrigenId);
     Optional<Transicion> findByIdAndActivoTrue(String id);
 }
