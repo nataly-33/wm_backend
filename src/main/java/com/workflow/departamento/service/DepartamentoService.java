@@ -64,4 +64,16 @@ public class DepartamentoService {
             .map(DepartamentoResponse::fromEntity)
             .collect(Collectors.toList());
     }
+
+    public List<DepartamentoResponse> listarDepartamentosSinAdmin(String empresaId) {
+        return departamentoRepository.findByEmpresaIdAndAdminDepartamentoIdIsNullAndActivoTrue(empresaId).stream()
+            .map(DepartamentoResponse::fromEntity)
+            .collect(Collectors.toList());
+    }
+
+    public List<DepartamentoResponse> listarDepartamentosCompletos(String empresaId) {
+        return departamentoRepository.findByEmpresaIdAndAdminDepartamentoIdIsNotNullAndActivoTrue(empresaId).stream()
+            .map(DepartamentoResponse::fromEntity)
+            .collect(Collectors.toList());
+    }
 }

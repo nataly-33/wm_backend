@@ -33,6 +33,34 @@ public class DepartamentoController {
         return ResponseEntity.ok(ApiResponse.success("Departamentos obtenidos", response));
     }
 
+    @GetMapping("/sin-admin")
+    public ResponseEntity<ApiResponse<List<DepartamentoResponse>>> listarDepartamentosSinAdmin(
+            @RequestAttribute("X-Empresa-Id") String empresaId) {
+        List<DepartamentoResponse> response = departamentoService.listarDepartamentosSinAdmin(empresaId);
+        return ResponseEntity.ok(ApiResponse.success("Departamentos sin admin obtenidos", response));
+    }
+
+    @GetMapping("/empresa/{empresaId}/sin-admin")
+    public ResponseEntity<ApiResponse<List<DepartamentoResponse>>> listarDepartamentosSinAdminPorEmpresa(
+            @PathVariable String empresaId) {
+        List<DepartamentoResponse> response = departamentoService.listarDepartamentosSinAdmin(empresaId);
+        return ResponseEntity.ok(ApiResponse.success("Departamentos sin admin obtenidos", response));
+    }
+
+    @GetMapping("/completos")
+    public ResponseEntity<ApiResponse<List<DepartamentoResponse>>> listarDepartamentosCompletos(
+            @RequestAttribute("X-Empresa-Id") String empresaId) {
+        List<DepartamentoResponse> response = departamentoService.listarDepartamentosCompletos(empresaId);
+        return ResponseEntity.ok(ApiResponse.success("Departamentos con admin obtenidos", response));
+    }
+
+    @GetMapping("/empresa/{empresaId}/completos")
+    public ResponseEntity<ApiResponse<List<DepartamentoResponse>>> listarDepartamentosCompletosPorEmpresa(
+            @PathVariable String empresaId) {
+        List<DepartamentoResponse> response = departamentoService.listarDepartamentosCompletos(empresaId);
+        return ResponseEntity.ok(ApiResponse.success("Departamentos con admin obtenidos", response));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<DepartamentoResponse>> obtenerDepartamento(
             @RequestAttribute("X-Empresa-Id") String empresaId,
