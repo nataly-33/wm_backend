@@ -9,11 +9,20 @@ import com.workflow.tramite.model.Tramite;
 import com.workflow.tramite.repository.TramiteRepository;
 import com.workflow.transicion.model.Transicion;
 import com.workflow.transicion.repository.TransicionRepository;
+import com.workflow.usuario.model.Usuario;
+import com.workflow.usuario.repository.UsuarioRepository;
+import com.workflow.departamento.model.Departamento;
+import com.workflow.departamento.repository.DepartamentoRepository;
+import com.workflow.formulario.repository.FormularioRepository;
+import com.workflow.formulario.model.Formulario;
+import com.workflow.formulario.model.Formulario.CampoFormulario;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +36,9 @@ public class MotorWorkflowService {
     private final NodoRepository nodoRepository;
     private final TransicionRepository transicionRepository;
     private final NotificacionService notificacionService;
+    private final UsuarioRepository usuarioRepository;
+    private final DepartamentoRepository departamentoRepository;
+    private final FormularioRepository formularioRepository;
 
     public Tramite iniciarTramite(Tramite tramite, String nodoInicioId) {
         tramite.setEstadoGeneral("EN_PROCESO");
@@ -108,11 +120,20 @@ public class MotorWorkflowService {
             if ("PARALELA".equals(posibleAlternativa.getTipo())) {
                 transicionesParalelas = salientes;
             } else if ("ALTERNATIVA".equals(posibleAlternativa.getTipo())) {
-                // Sacar valor de es_campo_prioridad y comparar con "etiqueta"
-                // Para simplificar, buscamos en el map la condicion (ej label "Aprobado")
+                // Caso 3: Buscamos el formulario del nodo anterior y vemos iterando qué campo tiene esCampoPrioridad = true
+                String valorDecision = "";
                 Map<String, Object> resp = ejecucionAnterior.getRespuestaFormulario();
-                String valorDecision = resp != null ? String.valueOf(resp.values().stream().findFirst().orElse("")) : "";
+                Formulario f = formularioRepository.findByNodoIdAndActivoTrue(ejecucionAnterior.getNodoId()).orElse(null);
                 
+                if (f != null && resp != null) {
+                    for (CampoFormulario campo : f.getCampos()) {
+                        if (Boolean.TRUE.equals(campo.getEsCampoPrioridad())) {
+                            valorDecision = String.valueOf(resp.get(campo.getNombre()));
+                            break;
+                        }
+                    }
+                }
+
                 for (Transicion t : salientes) {
                     if (t.getEtiqueta() != null && t.getEtiqueta().equalsIgnoreCase(valorDecision)) {
                         transicionSeguida = t;
@@ -120,8 +141,9 @@ public class MotorWorkflowService {
                     }
                 }
                 if (transicionSeguida == null) {
-                    // Fallback a defecto
-                    transicionSeguida = salientes.get(0);
+                    tramite.setEstadoGeneral("BLOQUEADO");
+                    tramiteRepository.save(tramite);
+                    throw new RuntimeException("El tramite ha sido BLOQUEADO. No hubo transicion Alternativa valida para: " + valorDecision);
                 }
             } else {
                 transicionSeguida = salientes.get(0); // LINEAL pero mas de 1 (error de diseño del usuario)
@@ -129,12 +151,25 @@ public class MotorWorkflowService {
         }
 
         if (transicionesParalelas != null) {
+            // FORK PARALELO (Caso 2)
+            List<String> nodosDestino = new ArrayList<>();
             for (Transicion t : transicionesParalelas) {
                 moverANodo(tramite, t.getNodoDestinoId());
+                nodosDestino.add(t.getNodoDestinoId());
             }
-            tramite.setNodoActualId(transicionesParalelas.get(0).getNodoDestinoId()); // Aproximacion a paralelo
+            tramite.setNodoActualId("NODO_PARALELO"); 
+            tramite.setNodosParalelosPendientes(nodosDestino);
         } else if (transicionSeguida != null) {
             moverANodo(tramite, transicionSeguida.getNodoDestinoId());
+            if (tramite.getNodosParalelosPendientes() != null) {
+                tramite.getNodosParalelosPendientes().remove(ejecucionAnterior.getNodoId());
+                // Si aún quedan nodos paralelos por terminar, el tramite sigue esperando el JOIN
+                if (!tramite.getNodosParalelosPendientes().isEmpty()) {
+                    // Update the string array and don't overwrite current primary node tracking completely until Join is done
+                    tramiteRepository.save(tramite);
+                    return;
+                }
+            }
             tramite.setNodoActualId(transicionSeguida.getNodoDestinoId());
         }
 
@@ -151,11 +186,33 @@ public class MotorWorkflowService {
             return;
         }
 
+        // Caso 4: Ciclos. Contabilizamos las iteraciones por nodo.
+        Map<String, Integer> iteraciones = tramite.getIteracionesPorNodo();
+        if (iteraciones == null) iteraciones = new HashMap<>();
+        iteraciones.put(nodoId, iteraciones.getOrDefault(nodoId, 0) + 1);
+        tramite.setIteracionesPorNodo(iteraciones);
+
+        // Caso 1: Validacion funcionario/admin departamento
+        String funcionarioAsignadoId = null;
+        String estadoAsignacion = "PENDIENTE";
+
+        List<Usuario> funcionarios = usuarioRepository.findByDepartamentoIdAndActivoTrue(nodoDestino.getDepartamentoId());
+        if (funcionarios == null || funcionarios.isEmpty()) {
+            Departamento depto = departamentoRepository.findById(nodoDestino.getDepartamentoId()).orElse(null);
+            if (depto != null && depto.getAdminDepartamentoId() != null) {
+                funcionarioAsignadoId = depto.getAdminDepartamentoId();
+            } else {
+                estadoAsignacion = "PENDIENTE_SIN_ASIGNAR";
+                // TODO Notificar Admin General que no hay a quien asignarle el trámite
+            }
+        }
+
         EjecucionNodo nuevaEjecucion = EjecucionNodo.builder()
             .tramiteId(tramite.getId())
             .nodoId(nodoId)
             .departamentoId(nodoDestino.getDepartamentoId())
-            .estado("PENDIENTE")
+            .funcionarioId(funcionarioAsignadoId)
+            .estado(estadoAsignacion)
             .iniciadoEn(LocalDateTime.now())
             .build();
         

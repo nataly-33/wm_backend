@@ -10,6 +10,8 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -48,4 +50,10 @@ public class Tramite {
 
     @Field("finalizado_en")
     private LocalDateTime finalizadoEn;
+
+    @Field("nodos_paralelos_pendientes")
+    private List<String> nodosParalelosPendientes;
+
+    @Field("iteraciones_por_nodo")
+    private Map<String, Integer> iteracionesPorNodo;
 }
