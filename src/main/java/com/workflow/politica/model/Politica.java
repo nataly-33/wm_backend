@@ -28,6 +28,7 @@ public class Politica {
     private Boolean generadaPorIa;
     private String creadoPor;
     private Boolean activo;
+    private String datosDiagramaJson;
 
     @CreatedDate
     private LocalDateTime creadoEn;

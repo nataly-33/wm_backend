@@ -20,6 +20,7 @@ public class PoliticaResponse {
     private String creadoPor;
     private LocalDateTime creadoEn;
     private LocalDateTime actualizadoEn;
+    private String datosDiagramaJson;
 
     public static PoliticaResponse fromEntity(Politica politica) {
         return new PoliticaResponse(
@@ -31,7 +32,8 @@ public class PoliticaResponse {
                 politica.getGeneradaPorIa(),
                 politica.getCreadoPor(),
                 politica.getCreadoEn(),
-                politica.getActualizadoEn()
+                politica.getActualizadoEn(),
+                politica.getDatosDiagramaJson()
         );
     }
 }

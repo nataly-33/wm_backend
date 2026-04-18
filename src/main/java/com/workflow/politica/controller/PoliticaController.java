@@ -2,6 +2,8 @@ package com.workflow.politica.controller;
 
 import com.workflow.common.dto.ApiResponse;
 import com.workflow.politica.dto.CrearPoliticaRequest;
+import com.workflow.politica.dto.DiagramaResponse;
+import com.workflow.politica.dto.GuardarDiagramaRequest;
 import com.workflow.politica.dto.PoliticaResponse;
 import com.workflow.politica.service.PoliticaService;
 import lombok.RequiredArgsConstructor;
@@ -67,5 +69,22 @@ public class PoliticaController {
             @RequestAttribute("X-Empresa-Id") String empresaId,
             @PathVariable String id) {
         return ResponseEntity.ok(ApiResponse.success("Politica desactivada", politicaService.desactivar(empresaId, id)));
+    }
+
+    @GetMapping("/{id}/diagrama")
+    public ResponseEntity<ApiResponse<DiagramaResponse>> obtenerDiagrama(
+            @RequestAttribute("X-Empresa-Id") String empresaId,
+            @PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success("Diagrama obtenido", politicaService.obtenerDiagrama(empresaId, id)));
+    }
+
+    @PutMapping("/{id}/diagrama")
+    public ResponseEntity<ApiResponse<PoliticaResponse>> guardarDiagrama(
+            @RequestAttribute("X-Empresa-Id") String empresaId,
+            @RequestAttribute("userId") String userId,
+            @PathVariable String id,
+            @RequestBody GuardarDiagramaRequest body) {
+        PoliticaResponse politica = politicaService.guardarDiagrama(empresaId, userId, id, body);
+        return ResponseEntity.ok(ApiResponse.success("Diagrama guardado", politica));
     }
 }
