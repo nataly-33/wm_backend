@@ -25,7 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -99,9 +99,41 @@ public class MotorWorkflowService {
         notificarMonitor(tramite);
     }
 
+    private List<Transicion> salientesActivas(String nodoOrigenId) {
+        return transicionRepository.findByNodoOrigenId(nodoOrigenId).stream()
+                .filter(t -> t.getActivo() == null || Boolean.TRUE.equals(t.getActivo()))
+                .collect(Collectors.toList());
+    }
+
     private void avanzarTramite(Tramite tramite, EjecucionNodo ejecucionAnterior) {
-        // Encontrar transiciones salientes del nodo recien completado
-        List<Transicion> salientes = transicionRepository.findByNodoOrigenId(ejecucionAnterior.getNodoId());
+        String nodoCompletado = ejecucionAnterior.getNodoId();
+
+        if (tramite.getNodosParalelosPendientes() != null && !tramite.getNodosParalelosPendientes().isEmpty()) {
+            boolean eraRamaParalela = tramite.getNodosParalelosPendientes().stream()
+                    .anyMatch(id -> id.equals(nodoCompletado));
+            if (eraRamaParalela) {
+                tramite.getNodosParalelosPendientes().removeIf(id -> id.equals(nodoCompletado));
+                if (!tramite.getNodosParalelosPendientes().isEmpty()) {
+                    tramiteRepository.save(tramite);
+                    notificarMonitor(tramite);
+                    return;
+                }
+                tramite.setNodosParalelosPendientes(null);
+                List<Transicion> salientesJoin = salientesActivas(nodoCompletado);
+                if (salientesJoin.isEmpty()) {
+                    marcarTramiteComoCompletado(tramite);
+                    return;
+                }
+                String siguiente = salientesJoin.get(0).getNodoDestinoId();
+                tramite.setNodoActualId(siguiente);
+                moverANodo(tramite, siguiente);
+                tramiteRepository.save(tramite);
+                notificarMonitor(tramite);
+                return;
+            }
+        }
+
+        List<Transicion> salientes = salientesActivas(nodoCompletado);
 
         if (salientes.isEmpty()) {
             marcarTramiteComoCompletado(tramite);
@@ -111,31 +143,33 @@ public class MotorWorkflowService {
         Transicion transicionSeguida = null;
         List<Transicion> transicionesParalelas = null;
 
-        // Si solo hay una linea, la seguimos
         if (salientes.size() == 1) {
             transicionSeguida = salientes.get(0);
         } else {
-            // Logica de ALTERNATIVA o PARALELA
-            Transicion posibleAlternativa = salientes.get(0);
-            if ("PARALELA".equals(posibleAlternativa.getTipo())) {
-                transicionesParalelas = salientes;
-            } else if ("ALTERNATIVA".equals(posibleAlternativa.getTipo())) {
-                // Caso 3: Buscamos el formulario del nodo anterior y vemos iterando qué campo tiene esCampoPrioridad = true
+            Transicion primera = salientes.get(0);
+            if ("PARALELA".equals(primera.getTipo())) {
+                boolean todasParalelas = salientes.stream().allMatch(t -> "PARALELA".equals(t.getTipo()));
+                transicionesParalelas = todasParalelas ? salientes : null;
+            }
+            if (transicionesParalelas == null && "ALTERNATIVA".equals(primera.getTipo())) {
                 String valorDecision = "";
                 Map<String, Object> resp = ejecucionAnterior.getRespuestaFormulario();
                 Formulario f = formularioRepository.findByNodoIdAndActivoTrue(ejecucionAnterior.getNodoId()).orElse(null);
-                
+
                 if (f != null && resp != null) {
                     for (CampoFormulario campo : f.getCampos()) {
                         if (Boolean.TRUE.equals(campo.getEsCampoPrioridad())) {
-                            valorDecision = String.valueOf(resp.get(campo.getNombre()));
+                            Object v = resp.get(campo.getNombre());
+                            valorDecision = v != null ? String.valueOf(v) : "";
                             break;
                         }
                     }
                 }
 
+                String vd = valorDecision.trim();
                 for (Transicion t : salientes) {
-                    if (t.getEtiqueta() != null && t.getEtiqueta().equalsIgnoreCase(valorDecision)) {
+                    if ("ALTERNATIVA".equals(t.getTipo()) && t.getEtiqueta() != null
+                            && t.getEtiqueta().trim().equalsIgnoreCase(vd)) {
                         transicionSeguida = t;
                         break;
                     }
@@ -145,32 +179,22 @@ public class MotorWorkflowService {
                     tramiteRepository.save(tramite);
                     throw new RuntimeException("El tramite ha sido BLOQUEADO. No hubo transicion Alternativa valida para: " + valorDecision);
                 }
-            } else {
-                transicionSeguida = salientes.get(0); // LINEAL pero mas de 1 (error de diseño del usuario)
+            } else if (transicionesParalelas == null) {
+                transicionSeguida = salientes.get(0);
             }
         }
 
         if (transicionesParalelas != null) {
-            // FORK PARALELO (Caso 2)
             List<String> nodosDestino = new ArrayList<>();
             for (Transicion t : transicionesParalelas) {
                 moverANodo(tramite, t.getNodoDestinoId());
                 nodosDestino.add(t.getNodoDestinoId());
             }
-            tramite.setNodoActualId("NODO_PARALELO"); 
+            tramite.setNodoActualId(null);
             tramite.setNodosParalelosPendientes(nodosDestino);
         } else if (transicionSeguida != null) {
-            moverANodo(tramite, transicionSeguida.getNodoDestinoId());
-            if (tramite.getNodosParalelosPendientes() != null) {
-                tramite.getNodosParalelosPendientes().remove(ejecucionAnterior.getNodoId());
-                // Si aún quedan nodos paralelos por terminar, el tramite sigue esperando el JOIN
-                if (!tramite.getNodosParalelosPendientes().isEmpty()) {
-                    // Update the string array and don't overwrite current primary node tracking completely until Join is done
-                    tramiteRepository.save(tramite);
-                    return;
-                }
-            }
             tramite.setNodoActualId(transicionSeguida.getNodoDestinoId());
+            moverANodo(tramite, transicionSeguida.getNodoDestinoId());
         }
 
         tramiteRepository.save(tramite);
