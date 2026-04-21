@@ -27,13 +27,26 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 
 import java.time.LocalDateTime;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
 
 @Configuration
 @RequiredArgsConstructor
 @Slf4j
 public class DataSeeder {
+
+        private static final double LANE_WIDTH = 280d;
+        private static final double LANE_START_X = 20d;
+        private static final double BASE_Y = 60d;
+        private static final double LEVEL_GAP = 160d;
+        private static final String FALLBACK_LANE_ID = "__default_lane__";
 
     private final EmpresaRepository empresaRepository;
     private final DepartamentoRepository departamentoRepository;
@@ -135,13 +148,13 @@ public class DataSeeder {
         Nodo n2 = crearNodo(pol.getId(), at.getId(), "TAREA", "Recibir solicitud del cliente", 40, 120);
         Nodo n3 = crearNodo(pol.getId(), at.getId(), "TAREA", "Verificar documentación", 40, 220);
         Nodo n4 = crearNodo(pol.getId(), at.getId(), "DECISION", "¿Documentación completa?", 40, 320);
-        Nodo n5 = crearNodo(pol.getId(), te.getId(), "TAREA", "Realizar inspección técnica", 40, 420);
-        Nodo n6 = crearNodo(pol.getId(), te.getId(), "TAREA", "Generar presupuesto", 40, 520);
-        Nodo n7 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Registrar pago", 40, 620);
-        Nodo n8 = crearNodo(pol.getId(), le.getId(), "TAREA", "Firmar contrato", 40, 720);
-        Nodo n9 = crearNodo(pol.getId(), null, "FIN", "Fin instalación", 40, 820);
-        Nodo n10 = crearNodo(pol.getId(), at.getId(), "TAREA", "Notificar al cliente", 300, 420);
-        Nodo n11 = crearNodo(pol.getId(), null, "FIN", "Fin rechazado", 300, 520);
+        Nodo n5 = crearNodo(pol.getId(), te.getId(), "TAREA", "Realizar inspección técnica", 40, 320);
+        Nodo n6 = crearNodo(pol.getId(), te.getId(), "TAREA", "Generar presupuesto", 40, 420);
+        Nodo n7 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Registrar pago", 40, 520);
+        Nodo n8 = crearNodo(pol.getId(), le.getId(), "TAREA", "Firmar contrato", 40, 620);
+        Nodo n9 = crearNodo(pol.getId(), null, "FIN", "Fin instalación", 40, 720);
+        Nodo n10 = crearNodo(pol.getId(), at.getId(), "TAREA", "Notificar al cliente", 300, 320);
+        Nodo n11 = crearNodo(pol.getId(), null, "FIN", "Fin rechazado", 300, 420);
 
         formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId())
@@ -187,6 +200,12 @@ public class DataSeeder {
         crearTransicion(pol.getId(), n7.getId(), n8.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n8.getId(), n9.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n10.getId(), n11.getId(), "LINEAL", null, null);
+
+        aplicarLayoutSeeder(
+                List.of(n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11),
+                transicionRepository.findByPoliticaIdAndActivoTrue(pol.getId()),
+                List.of(at, te, fa, le)
+        );
 
         pol.setEstado("ACTIVA");
         politicaRepository.save(pol);
@@ -274,6 +293,12 @@ public class DataSeeder {
         crearTransicion(pol.getId(), nOk.getId(), f1.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), nKo.getId(), f2.getId(), "LINEAL", null, null);
 
+        aplicarLayoutSeeder(
+                List.of(n1, n2, nf, nA, nB, nj, nd, nOk, nKo, f1, f2),
+                transicionRepository.findByPoliticaIdAndActivoTrue(pol.getId()),
+                List.of(at, te, fa)
+        );
+
         pol.setEstado("ACTIVA");
         politicaRepository.save(pol);
 
@@ -316,10 +341,10 @@ public class DataSeeder {
 
         Nodo n1 = crearNodo(pol.getId(), at.getId(), "INICIO", "Inicio", 40, 40);
         Nodo n2 = crearNodo(pol.getId(), at.getId(), "TAREA", "Recibir solicitud de baja", 40, 120);
-        Nodo n3 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Verificar saldo cero", 40, 220);
-        Nodo n4 = crearNodo(pol.getId(), te.getId(), "TAREA", "Retirar medidor", 40, 320);
-        Nodo n5 = crearNodo(pol.getId(), le.getId(), "TAREA", "Liquidar contrato", 40, 420);
-        Nodo n6 = crearNodo(pol.getId(), null, "FIN", "Fin", 40, 520);
+        Nodo n3 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Verificar saldo cero", 40, 120);
+        Nodo n4 = crearNodo(pol.getId(), te.getId(), "TAREA", "Retirar medidor", 40, 220);
+        Nodo n5 = crearNodo(pol.getId(), le.getId(), "TAREA", "Liquidar contrato", 40, 320);
+        Nodo n6 = crearNodo(pol.getId(), null, "FIN", "Fin", 40, 420);
 
         formularioRepository.save(Formulario.builder().politicaId(pol.getId()).nodoId(n2.getId()).nombre("Baja").activo(true)
                 .campos(List.of(campo("motivo", "Motivo", "TEXTO", true, false, null))).build());
@@ -329,6 +354,12 @@ public class DataSeeder {
         crearTransicion(pol.getId(), n3.getId(), n4.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n4.getId(), n5.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n5.getId(), n6.getId(), "LINEAL", null, null);
+
+        aplicarLayoutSeeder(
+                List.of(n1, n2, n3, n4, n5, n6),
+                transicionRepository.findByPoliticaIdAndActivoTrue(pol.getId()),
+                List.of(at, te, fa, le)
+        );
 
         pol.setEstado("ACTIVA");
         politicaRepository.save(pol);
@@ -361,14 +392,14 @@ public class DataSeeder {
 
         Nodo n1 = crearNodo(pol.getId(), at.getId(), "INICIO", "Inicio", 40, 40);
         Nodo n2 = crearNodo(pol.getId(), at.getId(), "TAREA", "Registrar reclamo", 40, 120);
-        Nodo n3 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Analizar consumo histórico", 40, 220);
-        Nodo n4 = crearNodo(pol.getId(), fa.getId(), "DECISION", "¿Error confirmado?", 40, 320);
-        Nodo n5 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Emitir nota de crédito", 40, 420);
-        Nodo f1 = crearNodo(pol.getId(), null, "FIN", "Fin nota", 40, 520);
-        Nodo n6 = crearNodo(pol.getId(), at.getId(), "TAREA", "Explicar al cliente", 300, 320);
-        Nodo n7 = crearNodo(pol.getId(), at.getId(), "DECISION", "¿Cliente acepta?", 300, 420);
-        Nodo f2 = crearNodo(pol.getId(), null, "FIN", "Fin aceptación", 300, 520);
-        Nodo n8 = crearNodo(pol.getId(), rrhh.getId(), "TAREA", "Elevar a supervisor", 460, 420);
+        Nodo n3 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Analizar consumo histórico", 40, 120);
+        Nodo n4 = crearNodo(pol.getId(), fa.getId(), "DECISION", "¿Error confirmado?", 40, 220);
+        Nodo n5 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Emitir nota de crédito", 40, 320);
+        Nodo f1 = crearNodo(pol.getId(), null, "FIN", "Fin nota", 40, 420);
+        Nodo n6 = crearNodo(pol.getId(), at.getId(), "TAREA", "Explicar al cliente", 300, 220);
+        Nodo n7 = crearNodo(pol.getId(), at.getId(), "DECISION", "¿Cliente acepta?", 300, 320);
+        Nodo f2 = crearNodo(pol.getId(), null, "FIN", "Fin aceptación", 300, 420);
+        Nodo n8 = crearNodo(pol.getId(), rrhh.getId(), "TAREA", "Elevar a supervisor", 460, 320);
 
         formularioRepository.save(Formulario.builder().politicaId(pol.getId()).nodoId(n4.getId()).nombre("Error facturación").activo(true)
                 .campos(List.of(campo("confirmado", "Confirmado", "TEXTO", true, true, null))).build());
@@ -385,6 +416,12 @@ public class DataSeeder {
         crearTransicion(pol.getId(), n7.getId(), f2.getId(), "ALTERNATIVA", "Sí", null);
         crearTransicion(pol.getId(), n7.getId(), n8.getId(), "ALTERNATIVA", "No", null);
         crearTransicion(pol.getId(), n8.getId(), n3.getId(), "LINEAL", null, null);
+
+        aplicarLayoutSeeder(
+                List.of(n1, n2, n3, n4, n5, f1, n6, n7, f2, n8),
+                transicionRepository.findByPoliticaIdAndActivoTrue(pol.getId()),
+                List.of(at, fa, rrhh)
+        );
 
         pol.setEstado("ACTIVA");
         politicaRepository.save(pol);
@@ -403,6 +440,483 @@ public class DataSeeder {
         ejecucionNodoRepository.save(EjecucionNodo.builder().tramiteId(t2.getId()).nodoId(n3.getId())
                 .departamentoId(fa.getId()).estado("EN_PROCESO").iniciadoEn(LocalDateTime.now().minusHours(1)).build());
     }
+
+        private void aplicarLayoutSeeder(List<Nodo> nodos, List<Transicion> transiciones, List<Departamento> carriles) {
+                if (nodos == null || nodos.isEmpty()) {
+                        return;
+                }
+
+                Map<String, Nodo> nodeById = new LinkedHashMap<>();
+                for (Nodo nodo : nodos) {
+                        nodeById.put(nodo.getId(), nodo);
+                }
+
+                Map<String, List<String>> successors = new HashMap<>();
+                Map<String, List<String>> predecessors = new HashMap<>();
+                for (String nodeId : nodeById.keySet()) {
+                        successors.put(nodeId, new ArrayList<>());
+                        predecessors.put(nodeId, new ArrayList<>());
+                }
+
+                List<Transicion> trList = transiciones == null ? List.of() : transiciones;
+                for (Transicion tr : trList) {
+                        String from = tr.getNodoOrigenId();
+                        String to = tr.getNodoDestinoId();
+                        if (!nodeById.containsKey(from) || !nodeById.containsKey(to)) {
+                                continue;
+                        }
+                        if (from.equals(to)) {
+                                continue;
+                        }
+                        successors.get(from).add(to);
+                        predecessors.get(to).add(from);
+                }
+
+                String inicioId = null;
+                for (Nodo nodo : nodos) {
+                        if ("INICIO".equals(nodo.getTipo())) {
+                                inicioId = nodo.getId();
+                                break;
+                        }
+                }
+                if (inicioId == null) {
+                        inicioId = nodos.get(0).getId();
+                }
+
+                Map<String, Integer> deptFreq = new LinkedHashMap<>();
+                for (Nodo nodo : nodos) {
+                        String dept = normalizarDepto(nodo.getDepartamentoId());
+                        if (dept == null) {
+                                continue;
+                        }
+                        deptFreq.put(dept, deptFreq.getOrDefault(dept, 0) + 1);
+                }
+
+                String deptoMasFrecuente = null;
+                int maxFreq = -1;
+                for (Map.Entry<String, Integer> entry : deptFreq.entrySet()) {
+                        if (entry.getValue() > maxFreq) {
+                                maxFreq = entry.getValue();
+                                deptoMasFrecuente = entry.getKey();
+                        }
+                }
+
+                List<String> laneOrder = new ArrayList<>();
+                Set<String> seenLane = new HashSet<>();
+
+                if (inicioId != null) {
+                        Queue<String> queue = new ArrayDeque<>();
+                        Set<String> visited = new HashSet<>();
+                        queue.add(inicioId);
+
+                        while (!queue.isEmpty()) {
+                                String current = queue.poll();
+                                if (current == null || !visited.add(current)) {
+                                        continue;
+                                }
+
+                                String dept = normalizarDepto(nodeById.get(current).getDepartamentoId());
+                                if (dept != null && seenLane.add(dept)) {
+                                        laneOrder.add(dept);
+                                }
+
+                                for (String next : successors.getOrDefault(current, List.of())) {
+                                        if (!visited.contains(next)) {
+                                                queue.add(next);
+                                        }
+                                }
+                        }
+                }
+
+                for (Nodo nodo : nodos) {
+                        String dept = normalizarDepto(nodo.getDepartamentoId());
+                        if (dept != null && seenLane.add(dept)) {
+                                laneOrder.add(dept);
+                        }
+                }
+
+                Map<String, String> resolvedDeptByNode = new HashMap<>();
+                for (String nodeId : nodeById.keySet()) {
+                        String dept = resolverDeptoNodo(
+                                        nodeId,
+                                        nodeById,
+                                        successors,
+                                        predecessors,
+                                        deptoMasFrecuente,
+                                        laneOrder,
+                                        carriles
+                        );
+                        resolvedDeptByNode.put(nodeId, dept);
+                        if (dept != null && seenLane.add(dept)) {
+                                laneOrder.add(dept);
+                        }
+                }
+
+                if (laneOrder.isEmpty()) {
+                        String fallbackCarril = null;
+                        if (carriles != null) {
+                                for (Departamento carril : carriles) {
+                                        String dept = normalizarDepto(carril.getId());
+                                        if (dept != null) {
+                                                fallbackCarril = dept;
+                                                break;
+                                        }
+                                }
+                        }
+                        laneOrder.add(fallbackCarril != null ? fallbackCarril : FALLBACK_LANE_ID);
+                }
+
+                Map<String, Integer> laneIndexByDept = new HashMap<>();
+                for (int i = 0; i < laneOrder.size(); i++) {
+                        laneIndexByDept.put(laneOrder.get(i), i);
+                }
+
+                List<String> topoOrder = construirOrdenTopologico(new ArrayList<>(nodeById.keySet()), successors, predecessors, inicioId);
+                Map<String, Integer> topoIndex = new HashMap<>();
+                for (int i = 0; i < topoOrder.size(); i++) {
+                        topoIndex.put(topoOrder.get(i), i);
+                }
+
+                Map<String, Integer> levels = new HashMap<>();
+                if (inicioId != null) {
+                        levels.put(inicioId, 0);
+                }
+
+                for (String nodeId : topoOrder) {
+                        Integer idx = topoIndex.get(nodeId);
+                        if (idx == null) {
+                                continue;
+                        }
+
+                        int level = levels.getOrDefault(nodeId, 0);
+                        for (String predId : predecessors.getOrDefault(nodeId, List.of())) {
+                                Integer predIdx = topoIndex.get(predId);
+                                if (predIdx == null || predIdx >= idx) {
+                                        continue;
+                                }
+                                level = Math.max(level, levels.getOrDefault(predId, 0) + 1);
+                        }
+
+                        if (nodeId.equals(inicioId)) {
+                                level = 0;
+                        }
+
+                        levels.put(nodeId, level);
+                }
+
+                alinearNivelesDeRamas(levels, topoIndex, successors, Math.max(1, nodeById.size() * 3));
+
+                for (Nodo nodo : nodos) {
+                        String nodeId = nodo.getId();
+                        String laneId = resolvedDeptByNode.getOrDefault(nodeId, laneOrder.get(0));
+                        int laneIndex = laneIndexByDept.getOrDefault(laneId, 0);
+
+                        double nodeWidth = anchoNodoTipo(nodo.getTipo());
+                        int spanFromLane = laneIndex;
+                        int spanToLane = laneIndex;
+
+                        if (esTipoParalelo(nodo.getTipo())) {
+                                Set<Integer> laneCandidates = new HashSet<>();
+                                laneCandidates.add(laneIndex);
+
+                                for (String nextId : successors.getOrDefault(nodeId, List.of())) {
+                                        String nextDept = resolvedDeptByNode.getOrDefault(nextId, laneId);
+                                        laneCandidates.add(laneIndexByDept.getOrDefault(nextDept, laneIndex));
+                                }
+                                for (String prevId : predecessors.getOrDefault(nodeId, List.of())) {
+                                        String prevDept = resolvedDeptByNode.getOrDefault(prevId, laneId);
+                                        laneCandidates.add(laneIndexByDept.getOrDefault(prevDept, laneIndex));
+                                }
+
+                                for (Integer candidate : laneCandidates) {
+                                        spanFromLane = Math.min(spanFromLane, candidate);
+                                        spanToLane = Math.max(spanToLane, candidate);
+                                }
+
+                                if (spanToLane > spanFromLane) {
+                                        nodeWidth = nodeWidth + ((spanToLane - spanFromLane) * LANE_WIDTH);
+                                }
+                        }
+
+                        double x = LANE_START_X + (laneIndex * LANE_WIDTH) + ((LANE_WIDTH - nodeWidth) / 2d);
+                        if (esTipoParalelo(nodo.getTipo())) {
+                                x = LANE_START_X + (spanFromLane * LANE_WIDTH) + 40d;
+                        }
+
+                        int level = levels.getOrDefault(nodeId, 0);
+                        double y = BASE_Y + (level * LEVEL_GAP);
+
+                        nodo.setPosicionX(x);
+                        nodo.setPosicionY(y);
+
+                        if (requiereDepartamento(nodo.getTipo())) {
+                                nodo.setDepartamentoId(laneId);
+                        }
+                }
+
+                nodoRepository.saveAll(nodos);
+        }
+
+        private String resolverDeptoNodo(
+                        String nodeId,
+                        Map<String, Nodo> nodeById,
+                        Map<String, List<String>> successors,
+                        Map<String, List<String>> predecessors,
+                        String deptoMasFrecuente,
+                        List<String> laneOrder,
+                        List<Departamento> carriles
+        ) {
+                Nodo nodo = nodeById.get(nodeId);
+                if (nodo == null) {
+                        return laneOrder.isEmpty() ? FALLBACK_LANE_ID : laneOrder.get(0);
+                }
+
+                String dept = normalizarDepto(nodo.getDepartamentoId());
+                if (dept != null) {
+                        return dept;
+                }
+
+                if ("INICIO".equals(nodo.getTipo())) {
+                        dept = buscarDeptoMasCercano(nodeId, successors, nodeById);
+                } else if ("FIN".equals(nodo.getTipo())) {
+                        dept = buscarDeptoMasCercano(nodeId, predecessors, nodeById);
+                } else {
+                        dept = buscarDeptoMasCercano(nodeId, successors, nodeById);
+                        if (dept == null) {
+                                dept = buscarDeptoMasCercano(nodeId, predecessors, nodeById);
+                        }
+                }
+
+                if (dept == null) {
+                        dept = deptoMasFrecuente;
+                }
+                if (dept == null && !laneOrder.isEmpty()) {
+                        dept = laneOrder.get(0);
+                }
+                if (dept == null && carriles != null) {
+                        for (Departamento carril : carriles) {
+                                String carrilId = normalizarDepto(carril.getId());
+                                if (carrilId != null) {
+                                        dept = carrilId;
+                                        break;
+                                }
+                        }
+                }
+
+                return dept != null ? dept : FALLBACK_LANE_ID;
+        }
+
+        private String buscarDeptoMasCercano(
+                        String startNodeId,
+                        Map<String, List<String>> adjacency,
+                        Map<String, Nodo> nodeById
+        ) {
+                Queue<String> queue = new ArrayDeque<>();
+                Set<String> visited = new HashSet<>();
+                queue.add(startNodeId);
+                visited.add(startNodeId);
+
+                while (!queue.isEmpty()) {
+                        String current = queue.poll();
+                        if (current == null) {
+                                continue;
+                        }
+
+                        for (String nextId : adjacency.getOrDefault(current, List.of())) {
+                                if (!visited.add(nextId)) {
+                                        continue;
+                                }
+
+                                Nodo next = nodeById.get(nextId);
+                                if (next != null) {
+                                        String dept = normalizarDepto(next.getDepartamentoId());
+                                        if (dept != null) {
+                                                return dept;
+                                        }
+                                }
+
+                                queue.add(nextId);
+                        }
+                }
+
+                return null;
+        }
+
+        private List<String> construirOrdenTopologico(
+                        List<String> nodeIds,
+                        Map<String, List<String>> successors,
+                        Map<String, List<String>> predecessors,
+                        String inicioId
+        ) {
+                Map<String, Integer> indegree = new HashMap<>();
+                for (String nodeId : nodeIds) {
+                        indegree.put(nodeId, predecessors.getOrDefault(nodeId, List.of()).size());
+                }
+
+                Queue<String> queue = new ArrayDeque<>();
+                Set<String> queued = new HashSet<>();
+                if (inicioId != null && indegree.getOrDefault(inicioId, 0) == 0) {
+                        queue.add(inicioId);
+                        queued.add(inicioId);
+                }
+
+                for (String nodeId : nodeIds) {
+                        if (indegree.getOrDefault(nodeId, 0) == 0 && queued.add(nodeId)) {
+                                queue.add(nodeId);
+                        }
+                }
+
+                List<String> order = new ArrayList<>();
+                Set<String> processed = new HashSet<>();
+
+                while (!queue.isEmpty()) {
+                        String current = queue.poll();
+                        if (current == null || !processed.add(current)) {
+                                continue;
+                        }
+                        order.add(current);
+
+                        for (String nextId : successors.getOrDefault(current, List.of())) {
+                                int nextIn = indegree.getOrDefault(nextId, 0) - 1;
+                                indegree.put(nextId, nextIn);
+                                if (nextIn <= 0 && !processed.contains(nextId) && queued.add(nextId)) {
+                                        queue.add(nextId);
+                                }
+                        }
+                }
+
+                Set<String> remaining = new HashSet<>(nodeIds);
+                remaining.removeAll(processed);
+
+                if (!remaining.isEmpty() && inicioId != null) {
+                        Queue<String> bfsQueue = new ArrayDeque<>();
+                        Set<String> bfsSeen = new HashSet<>();
+                        bfsQueue.add(inicioId);
+                        bfsSeen.add(inicioId);
+
+                        while (!bfsQueue.isEmpty()) {
+                                String current = bfsQueue.poll();
+                                if (current == null) {
+                                        continue;
+                                }
+
+                                if (remaining.remove(current)) {
+                                        order.add(current);
+                                }
+
+                                for (String nextId : successors.getOrDefault(current, List.of())) {
+                                        if (bfsSeen.add(nextId)) {
+                                                bfsQueue.add(nextId);
+                                        }
+                                }
+                        }
+                }
+
+                for (String nodeId : nodeIds) {
+                        if (remaining.remove(nodeId)) {
+                                order.add(nodeId);
+                        }
+                }
+
+                return order;
+        }
+
+        private void alinearNivelesDeRamas(
+                        Map<String, Integer> levels,
+                        Map<String, Integer> topoIndex,
+                        Map<String, List<String>> successors,
+                        int maxIterations
+        ) {
+                boolean changed = true;
+                int guard = 0;
+
+                while (changed && guard < maxIterations) {
+                        changed = false;
+                        guard++;
+
+                        for (Map.Entry<String, List<String>> entry : successors.entrySet()) {
+                                String nodeId = entry.getKey();
+                                Integer srcIndex = topoIndex.get(nodeId);
+                                if (srcIndex == null) {
+                                        continue;
+                                }
+
+                                List<String> forward = new ArrayList<>();
+                                for (String nextId : entry.getValue()) {
+                                        Integer nextIdx = topoIndex.get(nextId);
+                                        if (nextIdx != null && srcIndex < nextIdx) {
+                                                forward.add(nextId);
+                                        }
+                                }
+
+                                if (forward.size() < 2) {
+                                        continue;
+                                }
+
+                                int branchLevel = 0;
+                                for (String nextId : forward) {
+                                        branchLevel = Math.max(branchLevel, levels.getOrDefault(nextId, 0));
+                                }
+
+                                for (String nextId : forward) {
+                                        if (levels.getOrDefault(nextId, 0) != branchLevel) {
+                                                levels.put(nextId, branchLevel);
+                                                changed = true;
+                                        }
+                                }
+                        }
+
+                        for (Map.Entry<String, List<String>> entry : successors.entrySet()) {
+                                String srcId = entry.getKey();
+                                Integer srcIndex = topoIndex.get(srcId);
+                                if (srcIndex == null) {
+                                        continue;
+                                }
+
+                                int srcLevel = levels.getOrDefault(srcId, 0);
+                                for (String nextId : entry.getValue()) {
+                                        Integer nextIdx = topoIndex.get(nextId);
+                                        if (nextIdx == null || srcIndex >= nextIdx) {
+                                                continue;
+                                        }
+                                        int candidate = srcLevel + 1;
+                                        if (levels.getOrDefault(nextId, 0) < candidate) {
+                                                levels.put(nextId, candidate);
+                                                changed = true;
+                                        }
+                                }
+                        }
+                }
+        }
+
+        private boolean esTipoParalelo(String tipo) {
+                return "PARALELO".equals(tipo) || "PARALELO_FORK".equals(tipo) || "PARALELO_JOIN".equals(tipo);
+        }
+
+        private boolean requiereDepartamento(String tipo) {
+                return !"INICIO".equals(tipo) && !"FIN".equals(tipo);
+        }
+
+        private double anchoNodoTipo(String tipo) {
+                if ("INICIO".equals(tipo) || "FIN".equals(tipo)) {
+                        return 50d;
+                }
+                if ("DECISION".equals(tipo)) {
+                        return 100d;
+                }
+                if (esTipoParalelo(tipo)) {
+                        return 200d;
+                }
+                return 160d;
+        }
+
+        private String normalizarDepto(String departamentoId) {
+                if (departamentoId == null) {
+                        return null;
+                }
+                String clean = departamentoId.trim();
+                return clean.isEmpty() ? null : clean;
+        }
 
     private Formulario.CampoFormulario campo(String nombre, String etiqueta, String tipo, boolean req, boolean prioridad, List<String> opciones) {
         return Formulario.CampoFormulario.builder()
