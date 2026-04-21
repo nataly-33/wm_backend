@@ -45,6 +45,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/registro").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/seeder/**").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/seeder/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         // Resto protegido
                         .anyRequest().authenticated()
