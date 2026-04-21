@@ -10,5 +10,6 @@ import java.util.Optional;
 @Repository
 public interface NodoRepository extends MongoRepository<Nodo, String> {
     List<Nodo> findByPoliticaIdAndActivoTrue(String politicaId);
+    List<Nodo> findByDepartamentoIdAndActivoTrue(String departamentoId);
     Optional<Nodo> findByIdAndActivoTrue(String id);
 }

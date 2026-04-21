@@ -12,6 +12,7 @@ public interface UsuarioRepository extends MongoRepository<Usuario, String> {
     Optional<Usuario> findByEmailAndActivoTrue(String email);
 
     List<Usuario> findByEmpresaIdAndActivoTrue(String empresaId);
+    List<Usuario> findByEmpresaIdAndRolAndActivoTrue(String empresaId, String rol);
     List<Usuario> findByDepartamentoIdAndActivoTrue(String departamentoId);
 
     Optional<Usuario> findByIdAndActivoTrue(String id);
