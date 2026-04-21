@@ -47,6 +47,12 @@ public class NotificacionService {
         });
     }
 
+    public void notificarUsuario(String usuarioId, Object payload) {
+        if (usuarioId != null && !usuarioId.isBlank()) {
+            messagingTemplate.convertAndSend("/topic/usuario/" + usuarioId, payload);
+        }
+    }
+
     // Emitir eventos de monitor a toda la politica
     public void notificarCambioMonitor(String politicaId, Object payload) {
         messagingTemplate.convertAndSend("/topic/politica/" + politicaId, payload);
