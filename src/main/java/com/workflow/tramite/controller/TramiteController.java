@@ -10,16 +10,21 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/tramites")
+@RequestMapping({"/api/v1/tramites", "/tramites"})
 @RequiredArgsConstructor
 public class TramiteController {
     private final TramiteService tramiteService;
 
     @PostMapping
-    public ResponseEntity<?> iniciarTramite(@RequestBody Map<String, Object> body, @RequestHeader(value = "Usuario-Id", required = false) String usuarioId, @RequestHeader(value = "Empresa-Id", required = false) String empresaId) {
-        // En un entorno real, extraer usuarioId y empresaId del token SecurityContext.
-        // Aquí usaremos unos provistos por simplicidad o mocks si faltan.
+    public ResponseEntity<?> iniciarTramite(
+            @RequestBody Map<String, Object> body,
+            @RequestAttribute(value = "userId", required = false) String userIdAttr,
+            @RequestAttribute(value = "X-Empresa-Id", required = false) String empresaIdAttr,
+            @RequestHeader(value = "Usuario-Id", required = false) String usuarioIdHeader,
+            @RequestHeader(value = "Empresa-Id", required = false) String empresaIdHeader) {
         try {
+            String usuarioId = userIdAttr != null ? userIdAttr : usuarioIdHeader;
+            String empresaId = empresaIdAttr != null ? empresaIdAttr : empresaIdHeader;
             Tramite tramite = tramiteService.iniciarTramite(body, usuarioId, empresaId);
             return ResponseEntity.ok(tramite);
         } catch (Exception e) {
@@ -33,8 +38,40 @@ public class TramiteController {
         return ResponseEntity.ok(Map.of("data", tramites));
     }
 
+    @GetMapping("/politica/{politicaId}")
+    public ResponseEntity<?> listarPorPolitica(@PathVariable String politicaId) {
+        List<Tramite> tramites = tramiteService.listarTramitesPolitica(politicaId);
+        return ResponseEntity.ok(Map.of("data", tramites));
+    }
+
+    @GetMapping("/departamento/{departamentoId}")
+    public ResponseEntity<?> listarPorDepartamento(@PathVariable String departamentoId) {
+        List<Tramite> tramites = tramiteService.listarTramitesDepartamento(departamentoId);
+        return ResponseEntity.ok(Map.of("data", tramites));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<?> obtenerTramite(@PathVariable String id) {
-        return ResponseEntity.ok(Map.of("data", tramiteService.obtenerTramite(id)));
+        return ResponseEntity.ok(Map.of("data", tramiteService.obtenerTramiteConEjecuciones(id)));
+    }
+
+    @PutMapping("/{id}/cancelar")
+    public ResponseEntity<?> cancelarTramite(
+            @PathVariable String id,
+            @RequestAttribute(value = "rol", required = false) String rol) {
+        try {
+            if (!"ADMIN_GENERAL".equals(rol)) {
+                return ResponseEntity.status(403).body(Map.of("message", "Solo ADMIN_GENERAL puede cancelar trámites"));
+            }
+            Tramite tramite = tramiteService.cancelarTramite(id);
+            return ResponseEntity.ok(Map.of("message", "Trámite cancelado", "data", tramite));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    @GetMapping("/monitor/{politicaId}")
+    public ResponseEntity<?> monitor(@PathVariable String politicaId) {
+        return ResponseEntity.ok(Map.of("data", tramiteService.obtenerEstadoMonitor(politicaId)));
     }
 }
