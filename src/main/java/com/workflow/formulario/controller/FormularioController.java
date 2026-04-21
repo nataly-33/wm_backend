@@ -9,11 +9,35 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/formularios")
 @RequiredArgsConstructor
 public class FormularioController {
     private final FormularioService formularioService;
+
+    @GetMapping("/empresa/{empresaId}")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> listarPorEmpresa(
+            @PathVariable String empresaId,
+            @RequestAttribute("rol") String rol) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Formularios de empresa",
+                formularioService.listarPorEmpresa(empresaId, rol)
+        ));
+    }
+
+    @GetMapping("/departamento/{departamentoId}")
+    public ResponseEntity<ApiResponse<List<Map<String, Object>>>> listarPorDepartamento(
+            @PathVariable String departamentoId,
+            @RequestAttribute("userId") String userId,
+            @RequestAttribute("rol") String rol) {
+        return ResponseEntity.ok(ApiResponse.success(
+                "Formularios de departamento",
+                formularioService.listarPorDepartamento(userId, rol, departamentoId)
+        ));
+    }
 
     @GetMapping("/nodo/{nodoId}")
     public ResponseEntity<ApiResponse<FormularioResponse>> obtenerPorNodo(
