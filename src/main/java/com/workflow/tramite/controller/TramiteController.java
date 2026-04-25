@@ -1,5 +1,6 @@
 package com.workflow.tramite.controller;
 
+import com.workflow.tramite.dto.TramiteDetalladoResponse;
 import com.workflow.tramite.model.Tramite;
 import com.workflow.tramite.service.TramiteService;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +35,7 @@ public class TramiteController {
 
     @GetMapping("/empresa/{empresaId}")
     public ResponseEntity<?> listarTramites(@PathVariable String empresaId) {
-        List<Tramite> tramites = tramiteService.listarTramitesEmpresa(empresaId);
+        List<TramiteDetalladoResponse> tramites = tramiteService.listarTramitesEmpresaEnriquecidos(empresaId);
         return ResponseEntity.ok(Map.of("data", tramites));
     }
 
