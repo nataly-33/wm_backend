@@ -179,6 +179,9 @@ public class MotorWorkflowService {
 
                 Transicion transicion = seleccionarTransicionLineal(salientesJoin);
                 moverANodo(tramite, transicion.getNodoDestinoId());
+                if ("COMPLETADO".equals(tramite.getEstadoGeneral())) {
+                    return; // Nodo FIN alcanzado desde join paralelo
+                }
                 siguienteNodoParaEvento = tramite.getNodoActualId();
                 tramite.setEstadoGeneral("EN_PROCESO");
                 tramiteRepository.save(tramite);
@@ -246,6 +249,9 @@ public class MotorWorkflowService {
             tramite.setEstadoGeneral("EN_PROCESO");
         } else if (transicionSeguida != null) {
             moverANodo(tramite, transicionSeguida.getNodoDestinoId());
+            if ("COMPLETADO".equals(tramite.getEstadoGeneral())) {
+                return; // Nodo FIN alcanzado: marcarTramiteComoCompletado ya guardó y notificó
+            }
             siguienteNodoParaEvento = tramite.getNodoActualId();
             tramite.setEstadoGeneral("EN_PROCESO");
         }
@@ -441,6 +447,8 @@ public class MotorWorkflowService {
         evento.put("nodoAnteriorId", nodoAnteriorId);
         evento.put("nodoActualId", nodoActualId);
         evento.put("estado", tramite.getEstadoGeneral());
+        log.info("Emitiendo evento WebSocket NODO_COMPLETADO al canal /topic/politica/{}: tramite={}, nodoAnterior={}, nodoActual={}",
+                tramite.getPoliticaId(), tramite.getId(), nodoAnteriorId, nodoActualId);
         notificacionService.notificarCambioMonitor(tramite.getPoliticaId(), evento);
     }
 
@@ -461,6 +469,8 @@ public class MotorWorkflowService {
         evento.put("tipo", "TRAMITE_COMPLETADO");
         evento.put("tramiteId", tramite.getId());
         evento.put("titulo", tramite.getTitulo());
+        log.info("Emitiendo evento WebSocket TRAMITE_COMPLETADO al canal /topic/politica/{}: tramiteId={}",
+                tramite.getPoliticaId(), tramite.getId());
         notificacionService.notificarCambioMonitor(tramite.getPoliticaId(), evento);
     }
 

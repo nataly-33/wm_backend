@@ -97,7 +97,54 @@ public class TramiteService {
     public Map<String, Object> obtenerTramiteConEjecuciones(String id) {
         Tramite tramite = obtenerTramite(id);
         List<EjecucionNodo> ejecuciones = ejecucionNodoRepository.findByTramiteIdOrderByIniciadoEnDesc(id);
-        return Map.of("tramite", tramite, "ejecuciones", ejecuciones);
+
+        // Enriquecer ejecuciones con nombres
+        List<Map<String, Object>> historial = ejecuciones.stream().map(e -> {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", e.getId());
+            item.put("nodoId", e.getNodoId());
+            item.put("estado", e.getEstado());
+            item.put("iniciadoEn", e.getIniciadoEn());
+            item.put("completadoEn", e.getCompletadoEn());
+            item.put("observaciones", e.getObservaciones());
+            if (e.getNodoId() != null) {
+                nodoRepository.findById(e.getNodoId()).ifPresent(n -> {
+                    item.put("nodoNombre", n.getNombre());
+                    item.put("nodoTipo", n.getTipo());
+                });
+            }
+            if (e.getDepartamentoId() != null) {
+                departamentoRepository.findById(e.getDepartamentoId()).ifPresent(d ->
+                    item.put("departamentoNombre", d.getNombre()));
+            }
+            if (e.getFuncionarioId() != null) {
+                usuarioRepository.findById(e.getFuncionarioId()).ifPresent(u ->
+                    item.put("funcionarioNombre", u.getNombre()));
+            }
+            return item;
+        }).collect(Collectors.toList());
+
+        // Enriquecer tramite
+        Map<String, Object> tramiteMap = new HashMap<>();
+        tramiteMap.put("id", tramite.getId());
+        tramiteMap.put("titulo", tramite.getTitulo());
+        tramiteMap.put("estadoGeneral", tramite.getEstadoGeneral());
+        tramiteMap.put("prioridad", tramite.getPrioridad() != null ? tramite.getPrioridad() : "MEDIA");
+        tramiteMap.put("iniciadoEn", tramite.getIniciadoEn());
+        tramiteMap.put("finalizadoEn", tramite.getFinalizadoEn());
+        if (tramite.getPoliticaId() != null) {
+            politicaRepository.findById(tramite.getPoliticaId()).ifPresent(p ->
+                tramiteMap.put("nombrePolitica", p.getNombre()));
+        }
+        if (tramite.getIniciadoPor() != null) {
+            usuarioRepository.findById(tramite.getIniciadoPor()).ifPresent(u ->
+                tramiteMap.put("iniciadoPorNombre", u.getNombre()));
+        }
+        if (tramite.getFinalizadoEn() != null && tramite.getIniciadoEn() != null) {
+            tramiteMap.put("duracionTotal", calcularDuracion(tramite.getIniciadoEn(), tramite.getFinalizadoEn()));
+        }
+
+        return Map.of("tramite", tramiteMap, "historial", historial);
     }
 
     public Tramite cancelarTramite(String id) {
