@@ -1,5 +1,6 @@
 package com.workflow.ejecucion.controller;
 
+import com.workflow.ejecucion.dto.EjecucionDetalladaResponse;
 import com.workflow.ejecucion.model.EjecucionNodo;
 import com.workflow.ejecucion.service.EjecucionService;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ public class EjecucionController {
 
     @GetMapping("/funcionario/{usuarioId}")
     public ResponseEntity<?> listarPorFuncionario(@PathVariable String usuarioId) {
-        List<EjecucionNodo> ejecuciones = ejecucionService.listarPorFuncionario(usuarioId);
+        List<EjecucionDetalladaResponse> ejecuciones = ejecucionService.listarPorFuncionarioDetallado(usuarioId);
         return ResponseEntity.ok(Map.of("data", ejecuciones));
     }
 
