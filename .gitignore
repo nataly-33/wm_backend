@@ -57,3 +57,5 @@ application-local.properties
 
 postman
 .postman/
+
+./uploads

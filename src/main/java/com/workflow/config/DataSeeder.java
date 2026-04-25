@@ -2,8 +2,6 @@ package com.workflow.config;
 
 import com.workflow.departamento.model.Departamento;
 import com.workflow.departamento.repository.DepartamentoRepository;
-import com.workflow.ejecucion.model.EjecucionNodo;
-import com.workflow.ejecucion.repository.EjecucionNodoRepository;
 import com.workflow.empresa.model.Empresa;
 import com.workflow.empresa.repository.EmpresaRepository;
 import com.workflow.formulario.model.Formulario;
@@ -12,8 +10,6 @@ import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
 import com.workflow.politica.model.Politica;
 import com.workflow.politica.repository.PoliticaRepository;
-import com.workflow.tramite.model.Tramite;
-import com.workflow.tramite.repository.TramiteRepository;
 import com.workflow.transicion.model.Transicion;
 import com.workflow.transicion.repository.TransicionRepository;
 import com.workflow.usuario.model.Usuario;
@@ -55,8 +51,6 @@ public class DataSeeder {
     private final NodoRepository nodoRepository;
     private final TransicionRepository transicionRepository;
     private final FormularioRepository formularioRepository;
-    private final TramiteRepository tramiteRepository;
-    private final EjecucionNodoRepository ejecucionNodoRepository;
     private final BCryptPasswordEncoder passwordEncoder;
         @Value("${app.seeder.startup-enabled:false}")
         private boolean startupSeederEnabled;
@@ -292,45 +286,6 @@ public class DataSeeder {
 
         pol.setEstado("ACTIVA");
         politicaRepository.save(pol);
-
-        Tramite tDone = tramiteRepository.save(Tramite.builder()
-                .politicaId(pol.getId())
-                .empresaId(empresa.getId())
-                .titulo("Instalación medidor - Caso completado")
-                .estadoGeneral("COMPLETADO")
-                .nodoActualId(n9.getId())
-                .iniciadoPor(adminGen.getId())
-                .iniciadoEn(LocalDateTime.now().minusDays(5))
-                .finalizadoEn(LocalDateTime.now().minusDays(1))
-                .build());
-
-        ejecucionNodoRepository.save(EjecucionNodo.builder()
-                .tramiteId(tDone.getId())
-                .nodoId(n2.getId())
-                .departamentoId(at.getId())
-                .estado("COMPLETADO")
-                .respuestaFormulario(Map.of("ci_titular", "1234567"))
-                .completadoEn(LocalDateTime.now().minusDays(4))
-                .iniciadoEn(LocalDateTime.now().minusDays(5))
-                .build());
-
-        Tramite tProc = tramiteRepository.save(Tramite.builder()
-                .politicaId(pol.getId())
-                .empresaId(empresa.getId())
-                .titulo("Instalación medidor - En proceso")
-                .estadoGeneral("EN_PROCESO")
-                .nodoActualId(n3.getId())
-                .iniciadoPor(adminGen.getId())
-                .iniciadoEn(LocalDateTime.now().minusHours(3))
-                .build());
-
-        ejecucionNodoRepository.save(EjecucionNodo.builder()
-                .tramiteId(tProc.getId())
-                .nodoId(n3.getId())
-                .departamentoId(at.getId())
-                .estado("PENDIENTE")
-                .iniciadoEn(LocalDateTime.now().minusHours(2))
-                .build());
     }
 
     private void seedPolitica2(Empresa empresa, Usuario adminGen, Departamento at, Departamento te, Departamento fa) {
@@ -430,31 +385,6 @@ public class DataSeeder {
 
         pol.setEstado("ACTIVA");
         politicaRepository.save(pol);
-
-        Tramite t1 = tramiteRepository.save(Tramite.builder()
-                .politicaId(pol.getId())
-                .empresaId(empresa.getId())
-                .titulo("Reconexión - Completado")
-                .estadoGeneral("COMPLETADO")
-                .nodoActualId(f1.getId())
-                .iniciadoPor(adminGen.getId())
-                .iniciadoEn(LocalDateTime.now().minusDays(2))
-                .finalizadoEn(LocalDateTime.now().minusDays(1))
-                .build());
-        ejecucionNodoRepository.save(EjecucionNodo.builder().tramiteId(t1.getId()).nodoId(nOk.getId())
-                .departamentoId(te.getId()).estado("COMPLETADO").iniciadoEn(LocalDateTime.now().minusDays(2)).completadoEn(LocalDateTime.now().minusDays(1)).build());
-
-        Tramite t2 = tramiteRepository.save(Tramite.builder()
-                .politicaId(pol.getId())
-                .empresaId(empresa.getId())
-                .titulo("Reconexión - En proceso")
-                .estadoGeneral("EN_PROCESO")
-                .nodoActualId(nA.getId())
-                .iniciadoPor(adminGen.getId())
-                .iniciadoEn(LocalDateTime.now().minusHours(1))
-                .build());
-        ejecucionNodoRepository.save(EjecucionNodo.builder().tramiteId(t2.getId()).nodoId(nA.getId())
-                .departamentoId(fa.getId()).estado("EN_PROCESO").iniciadoEn(LocalDateTime.now().minusMinutes(30)).build());
     }
 
     private void seedPolitica3(Empresa empresa, Usuario adminGen, Departamento at, Departamento te, Departamento fa, Departamento le) {
@@ -528,20 +458,6 @@ public class DataSeeder {
 
         pol.setEstado("ACTIVA");
         politicaRepository.save(pol);
-
-        Tramite t1 = tramiteRepository.save(Tramite.builder()
-                .politicaId(pol.getId()).empresaId(empresa.getId()).titulo("Baja - Completada")
-                .estadoGeneral("COMPLETADO").nodoActualId(n6.getId())
-                .iniciadoPor(adminGen.getId()).iniciadoEn(LocalDateTime.now().minusDays(10)).finalizadoEn(LocalDateTime.now().minusDays(9)).build());
-        ejecucionNodoRepository.save(EjecucionNodo.builder().tramiteId(t1.getId()).nodoId(n5.getId())
-                .departamentoId(le.getId()).estado("COMPLETADO").completadoEn(LocalDateTime.now().minusDays(9)).iniciadoEn(LocalDateTime.now().minusDays(10)).build());
-
-        Tramite t2 = tramiteRepository.save(Tramite.builder()
-                .politicaId(pol.getId()).empresaId(empresa.getId()).titulo("Baja - En trámite")
-                .estadoGeneral("EN_PROCESO").nodoActualId(n3.getId())
-                .iniciadoPor(adminGen.getId()).iniciadoEn(LocalDateTime.now().minusHours(5)).build());
-        ejecucionNodoRepository.save(EjecucionNodo.builder().tramiteId(t2.getId()).nodoId(n3.getId())
-                .departamentoId(fa.getId()).estado("PENDIENTE").iniciadoEn(LocalDateTime.now().minusHours(4)).build());
     }
 
     private void seedPolitica4(Empresa empresa, Usuario adminGen, Departamento at, Departamento fa, Departamento rrhh) {
@@ -592,7 +508,7 @@ public class DataSeeder {
         Formulario fP4N4 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(n4.getId()).nombre("Confirmación de error").activo(true)
                 .campos(List.of(
-                        campo("resultado", "¿Se confirmó el error en la facturación?", "SELECCION", true, true, List.of("Sí", "No"))
+                        campo("resultado", "¿Se confirmó el error en la facturación?", "SELECCION", true, true, List.of("Aprobado", "Rechazado"))
                 )).build());
         n4.setFormularioId(fP4N4.getId()); nodoRepository.save(n4);
 
@@ -610,7 +526,7 @@ public class DataSeeder {
                 .politicaId(pol.getId()).nodoId(n6.getId()).nombre("Explicación al cliente").activo(true)
                 .campos(List.of(
                         campo("explicacion", "Explicación brindada al cliente", "TEXTO", true, false, null),
-                        campo("cliente_acepta", "¿El cliente aceptó la explicación?", "SELECCION", true, true, List.of("Sí", "No"))
+                        campo("cliente_acepta", "¿El cliente aceptó la explicación?", "SELECCION", true, true, List.of("Aprobado", "Rechazado"))
                 )).build());
         n6.setFormularioId(fP4N6.getId()); nodoRepository.save(n6);
 
@@ -618,7 +534,7 @@ public class DataSeeder {
         Formulario fP4N7 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(n7.getId()).nombre("Decisión de aceptación").activo(true)
                 .campos(List.of(
-                        campo("resultado_aceptacion", "¿El cliente acepta la resolución?", "SELECCION", true, true, List.of("Sí", "No"))
+                        campo("resultado_aceptacion", "¿El cliente acepta la resolución?", "SELECCION", true, true, List.of("Aprobado", "Rechazado"))
                 )).build());
         n7.setFormularioId(fP4N7.getId()); nodoRepository.save(n7);
 
@@ -634,12 +550,12 @@ public class DataSeeder {
         crearTransicion(pol.getId(), n1.getId(), n2.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n2.getId(), n3.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n3.getId(), n4.getId(), "LINEAL", null, null);
-        crearTransicion(pol.getId(), n4.getId(), n5.getId(), "ALTERNATIVA", "Sí", null);
-        crearTransicion(pol.getId(), n4.getId(), n6.getId(), "ALTERNATIVA", "No", null);
+        crearTransicion(pol.getId(), n4.getId(), n5.getId(), "ALTERNATIVA", "Aprobado", null);
+        crearTransicion(pol.getId(), n4.getId(), n6.getId(), "ALTERNATIVA", "Rechazado", null);
         crearTransicion(pol.getId(), n5.getId(), f1.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n6.getId(), n7.getId(), "LINEAL", null, null);
-        crearTransicion(pol.getId(), n7.getId(), f2.getId(), "ALTERNATIVA", "Sí", null);
-        crearTransicion(pol.getId(), n7.getId(), n8.getId(), "ALTERNATIVA", "No", null);
+        crearTransicion(pol.getId(), n7.getId(), f2.getId(), "ALTERNATIVA", "Aprobado", null);
+        crearTransicion(pol.getId(), n7.getId(), n8.getId(), "ALTERNATIVA", "Rechazado", null);
         crearTransicion(pol.getId(), n8.getId(), n3.getId(), "LINEAL", null, null);
 
         aplicarLayoutSeeder(
@@ -650,20 +566,6 @@ public class DataSeeder {
 
         pol.setEstado("ACTIVA");
         politicaRepository.save(pol);
-
-        Tramite t1 = tramiteRepository.save(Tramite.builder()
-                .politicaId(pol.getId()).empresaId(empresa.getId()).titulo("Reclamo - Cerrado con nota")
-                .estadoGeneral("COMPLETADO").nodoActualId(f1.getId())
-                .iniciadoPor(adminGen.getId()).iniciadoEn(LocalDateTime.now().minusDays(3)).finalizadoEn(LocalDateTime.now().minusDays(2)).build());
-        ejecucionNodoRepository.save(EjecucionNodo.builder().tramiteId(t1.getId()).nodoId(n5.getId())
-                .departamentoId(fa.getId()).estado("COMPLETADO").completadoEn(LocalDateTime.now().minusDays(2)).iniciadoEn(LocalDateTime.now().minusDays(3)).build());
-
-        Tramite t2 = tramiteRepository.save(Tramite.builder()
-                .politicaId(pol.getId()).empresaId(empresa.getId()).titulo("Reclamo - En análisis")
-                .estadoGeneral("EN_PROCESO").nodoActualId(n3.getId())
-                .iniciadoPor(adminGen.getId()).iniciadoEn(LocalDateTime.now().minusHours(2)).build());
-        ejecucionNodoRepository.save(EjecucionNodo.builder().tramiteId(t2.getId()).nodoId(n3.getId())
-                .departamentoId(fa.getId()).estado("EN_PROCESO").iniciadoEn(LocalDateTime.now().minusHours(1)).build());
     }
 
         private void aplicarLayoutSeeder(List<Nodo> nodos, List<Transicion> transiciones, List<Departamento> carriles) {
