@@ -148,7 +148,7 @@ public class DataSeeder {
         Nodo n2 = crearNodo(pol.getId(), at.getId(), "TAREA", "Recibir solicitud del cliente", 40, 120);
         Nodo n3 = crearNodo(pol.getId(), at.getId(), "TAREA", "Verificar documentación", 40, 220);
         Nodo n4 = crearNodo(pol.getId(), at.getId(), "DECISION", "¿Documentación completa?", 40, 320);
-        Nodo n5 = crearNodo(pol.getId(), te.getId(), "TAREA", "Realizar inspección técnica", 40, 320);
+        Nodo n5 = crearNodo(pol.getId(), te.getId(), "TAREA", "Inspección técnica", 40, 320);
         Nodo n6 = crearNodo(pol.getId(), te.getId(), "TAREA", "Generar presupuesto", 40, 420);
         Nodo n7 = crearNodo(pol.getId(), fa.getId(), "TAREA", "Registrar pago", 40, 520);
         Nodo n8 = crearNodo(pol.getId(), le.getId(), "TAREA", "Firmar contrato", 40, 620);
@@ -156,39 +156,122 @@ public class DataSeeder {
         Nodo n10 = crearNodo(pol.getId(), at.getId(), "TAREA", "Notificar al cliente", 300, 320);
         Nodo n11 = crearNodo(pol.getId(), null, "FIN", "Fin rechazado", 300, 420);
 
-        formularioRepository.save(Formulario.builder()
+        // Formulario nodo n2: Recibir solicitud del cliente
+        Formulario fN2 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId())
                 .nodoId(n2.getId())
-                .nombre("Solicitud de medidor")
+                .nombre("Solicitud de instalación de medidor")
                 .activo(true)
                 .campos(List.of(
-                        campo("nombre_titular", "Nombre titular", "TEXTO", true, false, null),
-                        campo("ci_titular", "CI titular", "TEXTO", true, false, null),
-                        campo("direccion_instalacion", "Dirección instalación", "TEXTO", true, false, null),
-                        campo("tipo_medidor", "Tipo medidor", "SELECCION", true, false, List.of("Monofásico", "Trifásico")),
-                        campo("foto_predio", "Foto predio", "IMAGEN", false, false, null)
+                        campo("nombre_titular", "Nombre completo del titular", "TEXTO", true, false, null),
+                        campo("ci_titular", "Cédula de identidad", "TEXTO", true, false, null),
+                        campo("telefono", "Teléfono de contacto", "TEXTO", true, false, null),
+                        campo("direccion", "Dirección de instalación", "TEXTO", true, false, null),
+                        campo("tipo_medidor", "Tipo de medidor solicitado", "SELECCION", true, false, List.of("Monofásico", "Trifásico")),
+                        campo("foto_predio", "Foto del predio", "IMAGEN", false, false, null)
                 ))
                 .build());
+        n2.setFormularioId(fN2.getId());
+        nodoRepository.save(n2);
 
-        formularioRepository.save(Formulario.builder()
+        // Formulario nodo n3: Verificar documentación
+        Formulario fN3 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId())
                 .nodoId(n3.getId())
-                .nombre("Verificación documental")
+                .nombre("Verificación de documentación")
                 .activo(true)
                 .campos(List.of(
-                        campo("doc_completa", "Documentación íntegra", "TEXTO", true, false, null)
+                        campo("documentos_recibidos", "¿Documentos recibidos correctamente?", "SELECCION", true, false, List.of("Completo", "Incompleto")),
+                        campo("observaciones_docs", "Observaciones", "TEXTO", false, false, null)
                 ))
                 .build());
+        n3.setFormularioId(fN3.getId());
+        nodoRepository.save(n3);
 
-        formularioRepository.save(Formulario.builder()
+        // Formulario nodo n4: DECISION ¿Documentación completa?
+        Formulario fN4 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId())
                 .nodoId(n4.getId())
-                .nombre("Decisión documentación")
+                .nombre("Decisión de documentación")
                 .activo(true)
                 .campos(List.of(
-                        campo("resultado", "Resultado", "TEXTO", true, true, null)
+                        campo("resultado", "Resultado de la verificación", "SELECCION", true, true, List.of("Aprobado", "Rechazado"))
                 ))
                 .build());
+        n4.setFormularioId(fN4.getId());
+        nodoRepository.save(n4);
+
+        // Formulario nodo n5: Inspección técnica
+        Formulario fN5 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId())
+                .nodoId(n5.getId())
+                .nombre("Inspección técnica")
+                .activo(true)
+                .campos(List.of(
+                        campo("resultado_inspeccion", "Resultado de la inspección", "SELECCION", true, false, List.of("Viable", "No viable")),
+                        campo("observaciones", "Observaciones técnicas", "TEXTO", false, false, null),
+                        campo("foto_medidor", "Foto del punto de instalación", "IMAGEN", false, false, null)
+                ))
+                .build());
+        n5.setFormularioId(fN5.getId());
+        nodoRepository.save(n5);
+
+        // Formulario nodo n6: Generar presupuesto
+        Formulario fN6 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId())
+                .nodoId(n6.getId())
+                .nombre("Presupuesto de instalación")
+                .activo(true)
+                .campos(List.of(
+                        campo("monto_presupuesto", "Monto del presupuesto (Bs)", "NUMERO", true, false, null),
+                        campo("tiempo_estimado", "Tiempo estimado de instalación", "TEXTO", true, false, null)
+                ))
+                .build());
+        n6.setFormularioId(fN6.getId());
+        nodoRepository.save(n6);
+
+        // Formulario nodo n7: Registrar pago
+        Formulario fN7 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId())
+                .nodoId(n7.getId())
+                .nombre("Registro de pago")
+                .activo(true)
+                .campos(List.of(
+                        campo("numero_recibo", "Número de recibo de pago", "TEXTO", true, false, null),
+                        campo("monto_pagado", "Monto pagado (Bs)", "NUMERO", true, false, null),
+                        campo("fecha_pago", "Fecha de pago", "FECHA", true, false, null)
+                ))
+                .build());
+        n7.setFormularioId(fN7.getId());
+        nodoRepository.save(n7);
+
+        // Formulario nodo n8: Firmar contrato
+        Formulario fN8 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId())
+                .nodoId(n8.getId())
+                .nombre("Firma de contrato")
+                .activo(true)
+                .campos(List.of(
+                        campo("numero_contrato", "Número de contrato", "TEXTO", true, false, null),
+                        campo("doc_contrato", "Documento del contrato firmado", "ARCHIVO", true, false, null)
+                ))
+                .build());
+        n8.setFormularioId(fN8.getId());
+        nodoRepository.save(n8);
+
+        // Formulario nodo n10: Notificar al cliente
+        Formulario fN10 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId())
+                .nodoId(n10.getId())
+                .nombre("Notificación al cliente")
+                .activo(true)
+                .campos(List.of(
+                        campo("motivo_rechazo", "Motivo del rechazo", "TEXTO", true, false, null),
+                        campo("fecha_reintento", "Fecha para reintentar", "FECHA", false, false, null)
+                ))
+                .build());
+        n10.setFormularioId(fN10.getId());
+        nodoRepository.save(n10);
 
         crearTransicion(pol.getId(), n1.getId(), n2.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n2.getId(), n3.getId(), "LINEAL", null, null);
@@ -267,19 +350,65 @@ public class DataSeeder {
         Nodo nA = crearNodo(pol.getId(), fa.getId(), "TAREA", "Verificar deuda pendiente", 200, 220);
         Nodo nB = crearNodo(pol.getId(), te.getId(), "TAREA", "Verificar estado técnico", 360, 220);
         Nodo nj = crearNodo(pol.getId(), at.getId(), "PARALELO", "Join", 200, 360);
-        Nodo nd = crearNodo(pol.getId(), at.getId(), "DECISION", "¿Todo aprobado?", 200, 460);
+        Nodo nd = crearNodo(pol.getId(), te.getId(), "DECISION", "¿Todo aprobado?", 200, 460);
         Nodo nOk = crearNodo(pol.getId(), te.getId(), "TAREA", "Ejecutar reconexión", 40, 560);
         Nodo nKo = crearNodo(pol.getId(), at.getId(), "TAREA", "Informar impedimento", 360, 560);
         Nodo f1 = crearNodo(pol.getId(), null, "FIN", "Fin OK", 40, 660);
         Nodo f2 = crearNodo(pol.getId(), null, "FIN", "Fin rechazo", 360, 660);
 
-        formularioRepository.save(Formulario.builder()
-                .politicaId(pol.getId())
-                .nodoId(nd.getId())
-                .nombre("Decisión reconexión")
-                .activo(true)
-                .campos(List.of(campo("resultado", "Resultado (Aprobado / Rechazado)", "TEXTO", true, true, null)))
-                .build());
+        // Formulario nodo n2: Recibir solicitud de reconexión
+        Formulario fP2N2 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n2.getId()).nombre("Solicitud de reconexión").activo(true)
+                .campos(List.of(
+                        campo("nombre_cliente", "Nombre del cliente", "TEXTO", true, false, null),
+                        campo("numero_cuenta", "Número de cuenta del servicio", "TEXTO", true, false, null),
+                        campo("motivo_corte", "Motivo del corte previo", "TEXTO", false, false, null)
+                )).build());
+        n2.setFormularioId(fP2N2.getId()); nodoRepository.save(n2);
+
+        // Formulario nodo nA: Verificar deuda pendiente
+        Formulario fP2NA = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(nA.getId()).nombre("Verificación de deuda").activo(true)
+                .campos(List.of(
+                        campo("monto_deuda", "Monto de deuda pendiente (Bs)", "NUMERO", true, false, null),
+                        campo("estado_deuda", "Estado de la deuda", "SELECCION", true, false, List.of("Sin deuda", "Con deuda", "Deuda pagada hoy"))
+                )).build());
+        nA.setFormularioId(fP2NA.getId()); nodoRepository.save(nA);
+
+        // Formulario nodo nB: Verificar estado técnico
+        Formulario fP2NB = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(nB.getId()).nombre("Verificación técnica").activo(true)
+                .campos(List.of(
+                        campo("estado_instalacion", "Estado de la instalación", "SELECCION", true, false, List.of("Apto", "Requiere reparación", "Inhabilitado")),
+                        campo("observaciones", "Observaciones técnicas", "TEXTO", false, false, null)
+                )).build());
+        nB.setFormularioId(fP2NB.getId()); nodoRepository.save(nB);
+
+        // Formulario nodo nd: DECISION ¿Todo aprobado?
+        Formulario fP2Nd = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(nd.getId()).nombre("Decisión de reconexión").activo(true)
+                .campos(List.of(
+                        campo("resultado_final", "Resultado final de la evaluación", "SELECCION", true, true, List.of("Aprobado", "Rechazado"))
+                )).build());
+        nd.setFormularioId(fP2Nd.getId()); nodoRepository.save(nd);
+
+        // Formulario nodo nOk: Ejecutar reconexión
+        Formulario fP2NOk = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(nOk.getId()).nombre("Ejecución de reconexión").activo(true)
+                .campos(List.of(
+                        campo("fecha_reconexion", "Fecha de reconexión", "FECHA", true, false, null),
+                        campo("tecnico_ejecutor", "Técnico que ejecutó", "TEXTO", true, false, null),
+                        campo("foto_reconexion", "Foto de la reconexión", "IMAGEN", false, false, null)
+                )).build());
+        nOk.setFormularioId(fP2NOk.getId()); nodoRepository.save(nOk);
+
+        // Formulario nodo nKo: Informar impedimento
+        Formulario fP2NKo = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(nKo.getId()).nombre("Informe de impedimento").activo(true)
+                .campos(List.of(
+                        campo("motivo_impedimento", "Motivo del impedimento", "TEXTO", true, false, null)
+                )).build());
+        nKo.setFormularioId(fP2NKo.getId()); nodoRepository.save(nKo);
 
         crearTransicion(pol.getId(), n1.getId(), n2.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n2.getId(), nf.getId(), "LINEAL", null, null);
@@ -346,8 +475,44 @@ public class DataSeeder {
         Nodo n5 = crearNodo(pol.getId(), le.getId(), "TAREA", "Liquidar contrato", 40, 320);
         Nodo n6 = crearNodo(pol.getId(), null, "FIN", "Fin", 40, 420);
 
-        formularioRepository.save(Formulario.builder().politicaId(pol.getId()).nodoId(n2.getId()).nombre("Baja").activo(true)
-                .campos(List.of(campo("motivo", "Motivo", "TEXTO", true, false, null))).build());
+        // Formulario nodo n2: Recibir solicitud de baja
+        Formulario fP3N2 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n2.getId()).nombre("Solicitud de baja de servicio").activo(true)
+                .campos(List.of(
+                        campo("nombre_titular", "Nombre del titular", "TEXTO", true, false, null),
+                        campo("numero_cuenta", "Número de cuenta", "TEXTO", true, false, null),
+                        campo("motivo_baja", "Motivo de la baja", "SELECCION", true, false, List.of("Mudanza", "Fallecimiento", "Económico", "Otro"))
+                )).build());
+        n2.setFormularioId(fP3N2.getId()); nodoRepository.save(n2);
+
+        // Formulario nodo n3: Verificar saldo cero
+        Formulario fP3N3 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n3.getId()).nombre("Verificación de saldo").activo(true)
+                .campos(List.of(
+                        campo("saldo_pendiente", "Saldo pendiente (Bs)", "NUMERO", true, false, null),
+                        campo("estado_saldo", "Estado del saldo", "SELECCION", true, false, List.of("Saldo cero", "Con deuda"))
+                )).build());
+        n3.setFormularioId(fP3N3.getId()); nodoRepository.save(n3);
+
+        // Formulario nodo n4: Retirar medidor
+        Formulario fP3N4 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n4.getId()).nombre("Retiro de medidor").activo(true)
+                .campos(List.of(
+                        campo("numero_medidor", "Número de serie del medidor", "TEXTO", true, false, null),
+                        campo("estado_medidor", "Estado del medidor al retiro", "SELECCION", true, false, List.of("Bueno", "Deteriorado", "Robado")),
+                        campo("foto_retiro", "Foto del retiro", "IMAGEN", false, false, null)
+                )).build());
+        n4.setFormularioId(fP3N4.getId()); nodoRepository.save(n4);
+
+        // Formulario nodo n5: Liquidar contrato
+        Formulario fP3N5 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n5.getId()).nombre("Liquidación de contrato").activo(true)
+                .campos(List.of(
+                        campo("numero_contrato", "Número de contrato liquidado", "TEXTO", true, false, null),
+                        campo("monto_liquidado", "Monto final liquidado (Bs)", "NUMERO", true, false, null),
+                        campo("doc_liquidacion", "Documento de liquidación", "ARCHIVO", true, false, null)
+                )).build());
+        n5.setFormularioId(fP3N5.getId()); nodoRepository.save(n5);
 
         crearTransicion(pol.getId(), n1.getId(), n2.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n2.getId(), n3.getId(), "LINEAL", null, null);
@@ -401,10 +566,70 @@ public class DataSeeder {
         Nodo f2 = crearNodo(pol.getId(), null, "FIN", "Fin aceptación", 300, 420);
         Nodo n8 = crearNodo(pol.getId(), rrhh.getId(), "TAREA", "Elevar a supervisor", 460, 320);
 
-        formularioRepository.save(Formulario.builder().politicaId(pol.getId()).nodoId(n4.getId()).nombre("Error facturación").activo(true)
-                .campos(List.of(campo("confirmado", "Confirmado", "TEXTO", true, true, null))).build());
-        formularioRepository.save(Formulario.builder().politicaId(pol.getId()).nodoId(n7.getId()).nombre("Aceptación").activo(true)
-                .campos(List.of(campo("acepta", "Acepta", "TEXTO", true, true, null))).build());
+        // Formulario nodo n2: Registrar reclamo
+        Formulario fP4N2 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n2.getId()).nombre("Registro de reclamo").activo(true)
+                .campos(List.of(
+                        campo("nombre_reclamante", "Nombre del reclamante", "TEXTO", true, false, null),
+                        campo("numero_cuenta", "Número de cuenta", "TEXTO", true, false, null),
+                        campo("periodo_reclamo", "Período reclamado (mes/año)", "TEXTO", true, false, null),
+                        campo("monto_reclamado", "Monto reclamado (Bs)", "NUMERO", true, false, null),
+                        campo("descripcion", "Descripción del reclamo", "TEXTO", true, false, null)
+                )).build());
+        n2.setFormularioId(fP4N2.getId()); nodoRepository.save(n2);
+
+        // Formulario nodo n3: Analizar consumo histórico
+        Formulario fP4N3 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n3.getId()).nombre("Análisis de consumo").activo(true)
+                .campos(List.of(
+                        campo("consumo_promedio", "Consumo promedio últimos 6 meses (kWh)", "NUMERO", true, false, null),
+                        campo("consumo_reclamado", "Consumo del período reclamado (kWh)", "NUMERO", true, false, null),
+                        campo("diferencia", "Diferencia detectada (%)", "NUMERO", true, false, null)
+                )).build());
+        n3.setFormularioId(fP4N3.getId()); nodoRepository.save(n3);
+
+        // Formulario nodo n4: DECISION ¿Error confirmado?
+        Formulario fP4N4 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n4.getId()).nombre("Confirmación de error").activo(true)
+                .campos(List.of(
+                        campo("resultado", "¿Se confirmó el error en la facturación?", "SELECCION", true, true, List.of("Sí", "No"))
+                )).build());
+        n4.setFormularioId(fP4N4.getId()); nodoRepository.save(n4);
+
+        // Formulario nodo n5: Emitir nota de crédito
+        Formulario fP4N5 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n5.getId()).nombre("Nota de crédito").activo(true)
+                .campos(List.of(
+                        campo("numero_nota", "Número de nota de crédito", "TEXTO", true, false, null),
+                        campo("monto_credito", "Monto a acreditar (Bs)", "NUMERO", true, false, null)
+                )).build());
+        n5.setFormularioId(fP4N5.getId()); nodoRepository.save(n5);
+
+        // Formulario nodo n6: Explicar al cliente
+        Formulario fP4N6 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n6.getId()).nombre("Explicación al cliente").activo(true)
+                .campos(List.of(
+                        campo("explicacion", "Explicación brindada al cliente", "TEXTO", true, false, null),
+                        campo("cliente_acepta", "¿El cliente aceptó la explicación?", "SELECCION", true, true, List.of("Sí", "No"))
+                )).build());
+        n6.setFormularioId(fP4N6.getId()); nodoRepository.save(n6);
+
+        // Formulario nodo n7: DECISION ¿Cliente acepta?
+        Formulario fP4N7 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n7.getId()).nombre("Decisión de aceptación").activo(true)
+                .campos(List.of(
+                        campo("resultado_aceptacion", "¿El cliente acepta la resolución?", "SELECCION", true, true, List.of("Sí", "No"))
+                )).build());
+        n7.setFormularioId(fP4N7.getId()); nodoRepository.save(n7);
+
+        // Formulario nodo n8: Elevar a supervisor
+        Formulario fP4N8 = formularioRepository.save(Formulario.builder()
+                .politicaId(pol.getId()).nodoId(n8.getId()).nombre("Escalamiento a supervisor").activo(true)
+                .campos(List.of(
+                        campo("supervisor_asignado", "Supervisor asignado", "TEXTO", true, false, null),
+                        campo("observaciones", "Observaciones del supervisor", "TEXTO", false, false, null)
+                )).build());
+        n8.setFormularioId(fP4N8.getId()); nodoRepository.save(n8);
 
         crearTransicion(pol.getId(), n1.getId(), n2.getId(), "LINEAL", null, null);
         crearTransicion(pol.getId(), n2.getId(), n3.getId(), "LINEAL", null, null);
