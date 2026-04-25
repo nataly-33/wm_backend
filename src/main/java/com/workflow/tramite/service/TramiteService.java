@@ -1,9 +1,13 @@
 package com.workflow.tramite.service;
 
+import com.workflow.departamento.model.Departamento;
+import com.workflow.departamento.repository.DepartamentoRepository;
 import com.workflow.ejecucion.model.EjecucionNodo;
 import com.workflow.ejecucion.repository.EjecucionNodoRepository;
 import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
+import com.workflow.politica.model.Politica;
+import com.workflow.politica.repository.PoliticaRepository;
 import com.workflow.tramite.model.Tramite;
 import com.workflow.tramite.repository.TramiteRepository;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +30,8 @@ public class TramiteService {
     private final MotorWorkflowService motorWorkflowService;
     private final NodoRepository nodoRepository;
     private final EjecucionNodoRepository ejecucionNodoRepository;
+    private final DepartamentoRepository departamentoRepository;
+    private final PoliticaRepository politicaRepository;
 
     public Tramite iniciarTramite(Map<String, Object> body, String iniciadoPor, String empresaId) {
         String politicaId = (String) body.get("politicaId");
@@ -102,6 +108,9 @@ public class TramiteService {
         List<Nodo> nodos = nodoRepository.findByPoliticaIdAndActivoTrue(politicaId);
         List<Tramite> tramites = tramiteRepository.findByPoliticaId(politicaId);
 
+        String nombrePolitica = politicaRepository.findById(politicaId)
+                .map(Politica::getNombre).orElse(politicaId);
+
         List<Tramite> tramitesActivos = tramites.stream()
                 .filter(t -> !"COMPLETADO".equals(t.getEstadoGeneral()) && !"RECHAZADO".equals(t.getEstadoGeneral()))
                 .collect(Collectors.toList());
@@ -116,29 +125,43 @@ public class TramiteService {
         Map<String, List<EjecucionNodo>> ejecucionesPorNodo = ejecucionesActivas.stream()
                 .collect(Collectors.groupingBy(EjecucionNodo::getNodoId));
 
+        // Cache de nombres de departamentos para evitar N+1 queries
+        Map<String, String> cacheNombreDepto = new HashMap<>();
+
         List<Map<String, Object>> nodosEstado = new ArrayList<>();
         for (Nodo nodo : nodos) {
             List<EjecucionNodo> ejecucionesNodo = ejecucionesPorNodo.getOrDefault(nodo.getId(), List.of());
             String color = calcularColorNodo(ejecucionesNodo);
 
+            String nombreDepto = null;
+            if (nodo.getDepartamentoId() != null) {
+                nombreDepto = cacheNombreDepto.computeIfAbsent(nodo.getDepartamentoId(),
+                        depId -> departamentoRepository.findById(depId)
+                                .map(Departamento::getNombre).orElse(depId));
+            }
+
             List<Map<String, Object>> tramitesNodo = ejecucionesNodo.stream()
-                    .map(e -> tramitePorId.get(e.getTramiteId()))
-                    .filter(Objects::nonNull)
-                    .distinct()
-                    .map(t -> {
-                    Map<String, Object> item = new HashMap<>();
-                    item.put("tramiteId", t.getId());
-                    item.put("titulo", t.getTitulo());
-                    item.put("prioridad", t.getPrioridad());
-                    return item;
+                    .map(e -> {
+                        Tramite t = tramitePorId.get(e.getTramiteId());
+                        if (t == null) return null;
+                        Map<String, Object> item = new HashMap<>();
+                        item.put("tramiteId", t.getId());
+                        item.put("titulo", t.getTitulo());
+                        item.put("prioridad", t.getPrioridad() != null ? t.getPrioridad() : "MEDIA");
+                        item.put("ejecucionId", e.getId());
+                        return item;
                     })
+                    .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
-            nodosEstado.add(Map.of(
-                    "nodoId", nodo.getId(),
-                    "color", color,
-                    "tramitesActivos", tramitesNodo
-            ));
+            Map<String, Object> nodoMap = new HashMap<>();
+            nodoMap.put("nodoId", nodo.getId());
+            nodoMap.put("nombreNodo", nodo.getNombre());
+            nodoMap.put("nombreDepartamento", nombreDepto);
+            nodoMap.put("tipo", nodo.getTipo());
+            nodoMap.put("color", color);
+            nodoMap.put("tramitesActivos", tramitesNodo);
+            nodosEstado.add(nodoMap);
         }
 
         List<Map<String, Object>> resumenActivos = tramitesActivos.stream()
@@ -146,21 +169,35 @@ public class TramiteService {
                 Map<String, Object> item = new HashMap<>();
                 item.put("tramiteId", t.getId());
                 item.put("titulo", t.getTitulo());
-                item.put("prioridad", t.getPrioridad());
-                item.put("estado", t.getEstadoGeneral());
+                item.put("prioridad", t.getPrioridad() != null ? t.getPrioridad() : "MEDIA");
+                item.put("estadoGeneral", t.getEstadoGeneral());
+                item.put("iniciadoEn", t.getIniciadoEn());
+                if (t.getNodoActualId() != null) {
+                    nodoRepository.findById(t.getNodoActualId()).ifPresent(n -> {
+                        item.put("nodoActualNombre", n.getNombre());
+                        if (n.getDepartamentoId() != null) {
+                            String deptoNombre = cacheNombreDepto.computeIfAbsent(n.getDepartamentoId(),
+                                    depId -> departamentoRepository.findById(depId)
+                                            .map(Departamento::getNombre).orElse(depId));
+                            item.put("departamentoActualNombre", deptoNombre);
+                        }
+                    });
+                }
                 return item;
             })
-                .collect(Collectors.toList());
+            .collect(Collectors.toList());
 
         long completados = tramites.stream().filter(t -> "COMPLETADO".equals(t.getEstadoGeneral())).count();
         long rechazados = tramites.stream().filter(t -> "RECHAZADO".equals(t.getEstadoGeneral())).count();
 
-        return Map.of(
-                "nodos", nodosEstado,
-                "tramitesActivos", resumenActivos,
-                "tramitesCompletados", completados,
-                "tramitesRechazados", rechazados
-        );
+        Map<String, Object> resultado = new HashMap<>();
+        resultado.put("politicaId", politicaId);
+        resultado.put("nombrePolitica", nombrePolitica);
+        resultado.put("nodos", nodosEstado);
+        resultado.put("tramitesActivos", resumenActivos);
+        resultado.put("tramitesCompletados", completados);
+        resultado.put("tramitesRechazados", rechazados);
+        return resultado;
     }
 
     private String calcularColorNodo(List<EjecucionNodo> ejecucionesNodo) {

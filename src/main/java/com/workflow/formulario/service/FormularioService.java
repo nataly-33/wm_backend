@@ -7,6 +7,7 @@ import com.workflow.formulario.model.Formulario;
 import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
+import com.workflow.notificacion.service.NotificacionService;
 import com.workflow.politica.model.Politica;
 import com.workflow.politica.repository.PoliticaRepository;
 import com.workflow.usuario.model.Usuario;
@@ -28,6 +29,7 @@ public class FormularioService {
     private final NodoRepository nodoRepository;
     private final PoliticaRepository politicaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final NotificacionService notificacionService;
 
     private void validarPoliticaEmpresa(String empresaId, String politicaId) {
         politicaRepository.findByIdAndEmpresaIdAndActivoTrue(politicaId, empresaId)
@@ -101,6 +103,7 @@ public class FormularioService {
         Formulario guardado = formularioRepository.save(formulario);
         nodo.setFormularioId(guardado.getId());
         nodoRepository.save(nodo);
+        emitirEventoFormulario(empresaId, nodo.getDepartamentoId(), "FORMULARIO_CREADO", guardado.getId(), nodo.getId(), guardado.getPoliticaId());
         return FormularioResponse.fromEntity(guardado);
     }
 
@@ -122,7 +125,9 @@ public class FormularioService {
         formulario.setNombre(request.getNombre());
         formulario.setCampos(mapCampos(request.getCampos()));
         formulario.setGeneradoPorIa(Boolean.TRUE.equals(request.getGeneradoPorIa()));
-        return FormularioResponse.fromEntity(formularioRepository.save(formulario));
+        Formulario guardado = formularioRepository.save(formulario);
+        emitirEventoFormulario(empresaId, nodo.getDepartamentoId(), "FORMULARIO_ACTUALIZADO", guardado.getId(), nodo.getId(), guardado.getPoliticaId());
+        return FormularioResponse.fromEntity(guardado);
     }
 
     public void eliminar(String empresaId, String userId, String rol, String formularioId) {
@@ -138,6 +143,18 @@ public class FormularioService {
             nodo.setFormularioId(null);
             nodoRepository.save(nodo);
         }
+        emitirEventoFormulario(empresaId, nodo.getDepartamentoId(), "FORMULARIO_ELIMINADO", formularioId, nodo.getId(), formulario.getPoliticaId());
+    }
+
+    private void emitirEventoFormulario(String empresaId, String departamentoId, String tipo, String formularioId, String nodoId, String politicaId) {
+        Map<String, Object> payload = new LinkedHashMap<>();
+        payload.put("tipo", tipo);
+        payload.put("formularioId", formularioId);
+        payload.put("nodoId", nodoId);
+        payload.put("politicaId", politicaId);
+
+        notificacionService.notificarCambioFormulariosEmpresa(empresaId, payload);
+        notificacionService.notificarCambioFormulariosDepartamento(departamentoId, payload);
     }
 
     public List<Map<String, Object>> listarPorEmpresa(String empresaId, String rol) {

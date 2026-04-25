@@ -53,6 +53,18 @@ public class NotificacionService {
         }
     }
 
+    public void notificarCambioFormulariosEmpresa(String empresaId, Object payload) {
+        if (empresaId != null && !empresaId.isBlank()) {
+            messagingTemplate.convertAndSend("/topic/empresa/" + empresaId + "/formularios", payload);
+        }
+    }
+
+    public void notificarCambioFormulariosDepartamento(String departamentoId, Object payload) {
+        if (departamentoId != null && !departamentoId.isBlank()) {
+            messagingTemplate.convertAndSend("/topic/departamento/" + departamentoId + "/formularios", payload);
+        }
+    }
+
     // Emitir eventos de monitor a toda la politica
     public void notificarCambioMonitor(String politicaId, Object payload) {
         messagingTemplate.convertAndSend("/topic/politica/" + politicaId, payload);
