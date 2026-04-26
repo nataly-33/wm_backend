@@ -10,6 +10,7 @@ import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
 import com.workflow.notificacion.service.NotificacionService;
+import com.workflow.notificacion.service.PushNotificacionService;
 import com.workflow.politica.model.Politica;
 import com.workflow.politica.repository.PoliticaRepository;
 import com.workflow.tramite.model.Tramite;
@@ -41,6 +42,7 @@ public class MotorWorkflowService {
     private final NodoRepository nodoRepository;
     private final TransicionRepository transicionRepository;
     private final NotificacionService notificacionService;
+    private final PushNotificacionService pushNotificacionService;
     private final UsuarioRepository usuarioRepository;
     private final DepartamentoRepository departamentoRepository;
     private final FormularioRepository formularioRepository;
@@ -152,6 +154,17 @@ public class MotorWorkflowService {
         evento.put("tramiteId", tramite.getId());
         evento.put("observaciones", observaciones);
         notificacionService.notificarCambioMonitor(tramite.getPoliticaId(), evento);
+
+        // Push al Admin General
+        List<Usuario> adminsRechazo = usuarioRepository.findByEmpresaIdAndRolAndActivoTrue(tramite.getEmpresaId(), "ADMIN_GENERAL");
+        adminsRechazo.stream().filter(a -> a.getFcmToken() != null && !a.getFcmToken().isBlank()).forEach(a ->
+            pushNotificacionService.enviarPush(
+                a.getFcmToken(),
+                "Trámite rechazado: " + tramite.getTitulo(),
+                observaciones != null ? observaciones : "El trámite fue rechazado.",
+                Map.of("tipo", "RECHAZADO", "tramiteId", tramite.getId())
+            )
+        );
     }
 
     private void avanzarTramite(Tramite tramite, EjecucionNodo ejecucionAnterior) {
@@ -357,6 +370,18 @@ public class MotorWorkflowService {
                 "TAREA_ASIGNADA",
                 "Se te asignó una tarea del trámite '" + tramite.getTitulo() + "'."
         );
+
+        // Push notification al funcionario asignado
+        usuarioRepository.findById(ejecucion.getFuncionarioId()).ifPresent(u -> {
+            if (u.getFcmToken() != null && !u.getFcmToken().isBlank()) {
+                pushNotificacionService.enviarPush(
+                    u.getFcmToken(),
+                    "Nueva tarea: " + nodo.getNombre(),
+                    "Trámite: " + tramite.getTitulo(),
+                    Map.of("tipo", "ASIGNACION", "ejecucionId", ejecucion.getId(), "tramiteId", tramite.getId())
+                );
+            }
+        });
     }
 
     private AsignacionUsuario buscarFuncionarioAsignado(String empresaId, String departamentoId) {
@@ -472,6 +497,17 @@ public class MotorWorkflowService {
         log.info("Emitiendo evento WebSocket TRAMITE_COMPLETADO al canal /topic/politica/{}: tramiteId={}",
                 tramite.getPoliticaId(), tramite.getId());
         notificacionService.notificarCambioMonitor(tramite.getPoliticaId(), evento);
+
+        // Push al Admin General
+        List<Usuario> admins = usuarioRepository.findByEmpresaIdAndRolAndActivoTrue(tramite.getEmpresaId(), "ADMIN_GENERAL");
+        admins.stream().filter(a -> a.getFcmToken() != null && !a.getFcmToken().isBlank()).forEach(a ->
+            pushNotificacionService.enviarPush(
+                a.getFcmToken(),
+                "Trámite completado: " + tramite.getTitulo(),
+                "El proceso ha finalizado exitosamente.",
+                Map.of("tipo", "COMPLETADO", "tramiteId", tramite.getId())
+            )
+        );
     }
 
     private record AsignacionUsuario(String funcionarioId, String estado) {
