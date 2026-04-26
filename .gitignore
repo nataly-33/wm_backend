@@ -44,9 +44,12 @@ Thumbs.db
 *.log
 logs/
 
-# Firebase credentials 
+# Firebase credentials
 firebase-credentials.json
 firebase-service-account.json
+secrets/*.json
+secrets/*.p12
+secrets/*.pem
 
 # Environment
 .env
@@ -58,4 +61,4 @@ application-local.properties
 postman
 .postman/
 
-./uploads
+uploads/
