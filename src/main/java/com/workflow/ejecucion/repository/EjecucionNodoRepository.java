@@ -18,4 +18,5 @@ public interface EjecucionNodoRepository extends MongoRepository<EjecucionNodo, 
     List<EjecucionNodo> findByFuncionarioIdAndEstadoIn(String funcionarioId, List<String> estados);
     long countByFuncionarioIdAndEstadoIn(String funcionarioId, List<String> estados);
     List<EjecucionNodo> findByNodoIdAndEstadoIn(String nodoId, List<String> estados);
+    List<EjecucionNodo> findByNodoId(String nodoId);
 }
