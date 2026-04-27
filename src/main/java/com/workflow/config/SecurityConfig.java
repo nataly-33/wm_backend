@@ -66,7 +66,9 @@ public class SecurityConfig {
             "http://localhost:*",
             "http://127.0.0.1:*",
             "http://192.168.*:*",
-            "https://*.azurestaticapps.net"
+            "https://*.azurestaticapps.net",
+            "https://*.onrender.com"
+
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
