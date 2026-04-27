@@ -66,7 +66,7 @@ public class SecurityConfig {
             "http://localhost:*",
             "http://127.0.0.1:*",
             "http://192.168.*:*",
-            "https://*.azurestaticapps.net",
+            "https://white-dune-03a7eaa0f.7.azurestaticapps.net",
             "https://*.onrender.com"
 
         ));
