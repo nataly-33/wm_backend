@@ -69,13 +69,17 @@ public class UsuarioController {
             @RequestAttribute(value = "userId", required = false) String userId,
             @RequestBody Map<String, String> body) {
         String fcmToken = body.get("fcmToken");
-        if (fcmToken == null || fcmToken.isBlank()) {
+        if (fcmToken == null) {
             return ResponseEntity.badRequest().body(Map.of("message", "fcmToken requerido"));
         }
         return usuarioRepository.findById(id).map(usuario -> {
-            usuario.setFcmToken(fcmToken);
+            usuario.setFcmToken(fcmToken.isBlank() ? null : fcmToken);
             usuarioRepository.save(usuario);
-            log.info("[FCM] Token registrado para usuario {} ({})", usuario.getEmail(), id);
+            if (fcmToken.isBlank()) {
+                log.info("[FCM] Token eliminado para usuario {} ({})", usuario.getEmail(), id);
+            } else {
+                log.info("[FCM] Token registrado para usuario {} ({})", usuario.getEmail(), id);
+            }
             return ResponseEntity.ok(Map.of("message", "FCM token actualizado"));
         }).orElse(ResponseEntity.notFound().build());
     }
