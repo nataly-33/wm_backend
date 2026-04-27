@@ -1,5 +1,12 @@
 HELP.md
-#target/
+target/classes/
+target/test-classes/
+target/generated-sources/
+target/generated-test-sources/
+target/maven-status/
+target/maven-archiver/
+target/workflow-back-0.0.1-SNAPSHOT.jar.original
+
 !target/workflow-back-0.0.1-SNAPSHOT.jar 
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
@@ -51,6 +58,7 @@ firebase-service-account.json
 secrets/*.json
 secrets/*.p12
 secrets/*.pem
+secrets/firebase_base64.txt
 
 # Environment
 .env
