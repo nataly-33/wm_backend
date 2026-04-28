@@ -1,6 +1,8 @@
 package com.workflow.notificacion.service;
 
 import com.google.firebase.FirebaseApp;
+import com.google.firebase.messaging.AndroidConfig;
+import com.google.firebase.messaging.AndroidNotification;
 import com.google.firebase.messaging.FirebaseMessaging;
 import com.google.firebase.messaging.Message;
 import com.google.firebase.messaging.Notification;
@@ -40,6 +42,13 @@ public class PushNotificacionService {
                     .setNotification(Notification.builder()
                             .setTitle(titulo)
                             .setBody(cuerpo)
+                            .build())
+                    .setAndroidConfig(AndroidConfig.builder()
+                            .setPriority(AndroidConfig.Priority.HIGH)
+                            .setNotification(AndroidNotification.builder()
+                                    .setChannelId("workflow_channel")
+                                    .setSound("default")
+                                    .build())
                             .build());
 
             if (data != null) {
