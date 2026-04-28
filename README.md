@@ -56,8 +56,8 @@ MONGODB_URI=mongodb://localhost:27017/workflow_db
 JWT_SECRET=tu-secreto-muy-largo-y-seguro-minimo-32-caracteres
 JWT_EXPIRATION=86400000
 IA_SERVICE_URL=http://localhost:8001
-FIREBASE_CREDENTIALS=
-AZURE_STORAGE_CONNECTION_STRING=
+FIREBASE_CREDENTIALS=                # JSON de service account (para push notifications)
+AZURE_STORAGE_CONNECTION_STRING=     # Para almacenamiento de archivos adjuntos
 ```
 
 > Para desarrollo local, solo `MONGODB_URI` y `JWT_SECRET` son obligatorios. El resto puede dejarse vacío hasta que se necesite.
@@ -151,7 +151,9 @@ src/
     │   ├── formulario/                  ← Módulo: Formularios dinámicos
     │   ├── tramite/                     ← Módulo: Trámites
     │   ├── ejecucion/                   ← Módulo: Ejecuciones de nodo
-    │   └── notificacion/                ← Módulo: Notificaciones
+    │   ├── notificacion/                ← Módulo: Notificaciones (web + push FCM)
+    │   ├── ia/                          ← Módulo: Proxy al microservicio Python de IA
+    │   └── archivo/                     ← Módulo: Subida de archivos a Azure Blob
     │
     └── resources/
         └── application.properties

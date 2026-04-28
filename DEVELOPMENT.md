@@ -54,6 +54,8 @@ Cliente (Angular / Flutter)
 | `tramite`      | `com.workflow.tramite`      | Instancias de procesos |
 | `ejecucion`    | `com.workflow.ejecucion`    | Pasos ejecutados de un trámite |
 | `notificacion` | `com.workflow.notificacion` | Notificaciones web y push |
+| `ia`           | `com.workflow.ia`           | Proxy al microservicio Python de IA |
+| `archivo`      | `com.workflow.archivo`      | Subida de archivos a Azure Blob Storage |
 
 ---
 
@@ -366,7 +368,7 @@ public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration config = new CorsConfiguration();
     config.setAllowedOrigins(List.of(
         "http://localhost:4200",
-        "https://tu-app.azurestaticapps.net"  // Agregar aquí
+        "https://tu-frontend.onrender.com"  // Agregar aquí para Render
     ));
     config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
     config.setAllowedHeaders(List.of("*"));
@@ -413,8 +415,8 @@ MONGODB_URI=mongodb://localhost:27017/workflow_db
 JWT_SECRET=local-dev-secret-muy-largo-minimo-32-caracteres-2024
 JWT_EXPIRATION=86400000
 IA_SERVICE_URL=http://localhost:8001
-FIREBASE_CREDENTIALS=
-AZURE_STORAGE_CONNECTION_STRING=
+FIREBASE_CREDENTIALS=       # JSON de service account de Firebase Admin (base64 o path)
+AZURE_STORAGE_CONNECTION_STRING=   # Para subida de archivos (opcional en dev local)
 ```
 
 Para cargar el `.env` automáticamente al correr con Maven, agrega en `application.properties`:
