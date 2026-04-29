@@ -175,8 +175,8 @@ public class DataSeeder {
                 .nombre("Verificación de documentación")
                 .activo(true)
                 .campos(List.of(
-                        campo("documentos_recibidos", "¿Documentos recibidos correctamente?", "SELECCION", true, false, List.of("Completo", "Incompleto")),
-                        campo("observaciones_docs", "Observaciones", "TEXTO", false, false, null)
+                        campoRadio("documentos_recibidos", "Estado de la documentación", List.of("Completo", "Incompleto", "Pendiente"), true, false),
+                        campoTextarea("observaciones_docs", "Observaciones sobre los documentos", 4, false)
                 ))
                 .build());
         n3.setFormularioId(fN3.getId());
@@ -202,8 +202,9 @@ public class DataSeeder {
                 .nombre("Inspección técnica")
                 .activo(true)
                 .campos(List.of(
-                        campo("resultado_inspeccion", "Resultado de la inspección", "SELECCION", true, false, List.of("Viable", "No viable")),
-                        campo("observaciones", "Observaciones técnicas", "TEXTO", false, false, null),
+                        campoRadio("resultado_inspeccion", "Resultado de la inspección", List.of("Viable", "No viable", "Requiere revisión adicional"), true, false),
+                        campoTextarea("observaciones_tecnicas", "Observaciones técnicas detalladas", 4, false),
+                        campoGrid("materiales_usados", "Materiales utilizados", List.of("Material", "Cantidad", "Unidad"), false),
                         campo("foto_medidor", "Foto del punto de instalación", "IMAGEN", false, false, null)
                 ))
                 .build());
@@ -217,8 +218,9 @@ public class DataSeeder {
                 .nombre("Presupuesto de instalación")
                 .activo(true)
                 .campos(List.of(
-                        campo("monto_presupuesto", "Monto del presupuesto (Bs)", "NUMERO", true, false, null),
-                        campo("tiempo_estimado", "Tiempo estimado de instalación", "TEXTO", true, false, null)
+                        campo("monto_presupuesto", "Monto total del presupuesto (Bs)", "NUMERO", true, false, null),
+                        campoRadio("tiempo_estimado", "Tiempo estimado de instalación", List.of("1-2 días", "3-5 días", "1 semana", "Más de 1 semana"), true, false),
+                        campoTextarea("detalle_presupuesto", "Detalle del presupuesto", 3, false)
                 ))
                 .build());
         n6.setFormularioId(fN6.getId());
@@ -1049,6 +1051,24 @@ public class DataSeeder {
         return Formulario.CampoFormulario.builder()
                 .nombre(nombre).etiqueta(etiqueta).tipo(tipo).requerido(req).esCampoPrioridad(prioridad).opciones(opciones)
                 .build();
+    }
+
+    private Formulario.CampoFormulario campoTextarea(String nombre, String etiqueta, int filas, boolean req) {
+        return Formulario.CampoFormulario.builder()
+                .nombre(nombre).etiqueta(etiqueta).tipo("TEXTAREA").requerido(req)
+                .esCampoPrioridad(false).filas(filas).build();
+    }
+
+    private Formulario.CampoFormulario campoRadio(String nombre, String etiqueta, List<String> opciones, boolean req, boolean prioridad) {
+        return Formulario.CampoFormulario.builder()
+                .nombre(nombre).etiqueta(etiqueta).tipo("RADIO").requerido(req)
+                .esCampoPrioridad(prioridad).opciones(opciones).build();
+    }
+
+    private Formulario.CampoFormulario campoGrid(String nombre, String etiqueta, List<String> columnas, boolean req) {
+        return Formulario.CampoFormulario.builder()
+                .nombre(nombre).etiqueta(etiqueta).tipo("GRID").requerido(req)
+                .esCampoPrioridad(false).columnas(columnas).build();
     }
 
     private Departamento crearDepto(String empresaId, String nombre, String descripcion) {

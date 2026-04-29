@@ -58,4 +58,12 @@ public class IaController {
             @RequestBody GenerarFormularioRequest request) {
         return ResponseEntity.ok(iaService.generarFormulario(request));
     }
+
+    @Operation(summary = "Sugerir valor para un campo de formulario con IA")
+    @PostMapping("/sugerir-campo")
+    @PreAuthorize("hasRole('FUNCIONARIO') or hasRole('ADMIN_GENERAL') or hasRole('ADMIN_DEPARTAMENTO')")
+    public ResponseEntity<ApiResponse<Object>> sugerirCampo(
+            @RequestBody Map<String, String> request) {
+        return ResponseEntity.ok(iaService.sugerirCampo(request));
+    }
 }

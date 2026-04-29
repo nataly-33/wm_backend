@@ -160,6 +160,20 @@ public class IaService {
         }
     }
 
+    public ApiResponse<Object> sugerirCampo(Map<String, String> request) {
+        try {
+            Object respuesta = restTemplate.postForObject(
+                    iaServiceUrl + "/ia/sugerir-campo",
+                    jsonEntity(request),
+                    Object.class
+            );
+            return ApiResponse.success("Sugerencia generada", respuesta);
+        } catch (Exception e) {
+            log.warn("sugerir-campo: microservicio no disponible: {}", e.getMessage());
+            return ApiResponse.success("Sin sugerencia", Map.of("sugerencia", ""));
+        }
+    }
+
     private List<MetricasNodoDto> calcularMetricasPorNodo(String politicaId) {
         List<Nodo> nodos = nodoRepository.findByPoliticaIdAndActivoTrue(politicaId);
         List<MetricasNodoDto> metricas = new ArrayList<>();
