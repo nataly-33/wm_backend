@@ -5,11 +5,14 @@ import com.workflow.politica.dto.CrearPoliticaRequest;
 import com.workflow.politica.dto.DiagramaResponse;
 import com.workflow.politica.dto.GuardarDiagramaRequest;
 import com.workflow.politica.dto.PoliticaResponse;
+import com.workflow.politica.dto.VersionHistorialResponse;
 import com.workflow.politica.service.PoliticaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 import java.util.List;
 
@@ -44,9 +47,10 @@ public class PoliticaController {
     @PutMapping("/{id}")
     public ResponseEntity<ApiResponse<PoliticaResponse>> actualizar(
             @RequestAttribute("X-Empresa-Id") String empresaId,
+            @RequestAttribute("userId") String userId,
             @PathVariable String id,
             @RequestBody CrearPoliticaRequest request) {
-        return ResponseEntity.ok(ApiResponse.success("Politica actualizada", politicaService.actualizar(empresaId, id, request)));
+        return ResponseEntity.ok(ApiResponse.success("Politica actualizada", politicaService.actualizar(empresaId, userId, id, request)));
     }
 
     @DeleteMapping("/{id}")
@@ -60,15 +64,25 @@ public class PoliticaController {
     @PutMapping("/{id}/activar")
     public ResponseEntity<ApiResponse<PoliticaResponse>> activar(
             @RequestAttribute("X-Empresa-Id") String empresaId,
+            @RequestAttribute("userId") String userId,
             @PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success("Politica activada", politicaService.activar(empresaId, id)));
+        return ResponseEntity.ok(ApiResponse.success("Politica activada", politicaService.activar(empresaId, userId, id)));
     }
 
     @PutMapping("/{id}/desactivar")
     public ResponseEntity<ApiResponse<PoliticaResponse>> desactivar(
             @RequestAttribute("X-Empresa-Id") String empresaId,
+            @RequestAttribute("userId") String userId,
             @PathVariable String id) {
-        return ResponseEntity.ok(ApiResponse.success("Politica desactivada", politicaService.desactivar(empresaId, id)));
+        return ResponseEntity.ok(ApiResponse.success("Politica desactivada", politicaService.desactivar(empresaId, userId, id)));
+    }
+
+    @GetMapping("/{id}/historial")
+    public ResponseEntity<ApiResponse<List<VersionHistorialResponse>>> historial(
+            @RequestAttribute("X-Empresa-Id") String empresaId,
+            @PathVariable String id) {
+        return ResponseEntity.ok(ApiResponse.success("Historial obtenido",
+                politicaService.listarHistorial(empresaId, id)));
     }
 
     @GetMapping("/{id}/diagrama")
