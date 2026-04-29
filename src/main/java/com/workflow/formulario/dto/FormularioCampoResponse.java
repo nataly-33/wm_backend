@@ -17,15 +17,19 @@ public class FormularioCampoResponse {
     private Boolean requerido;
     private Boolean esCampoPrioridad;
     private List<String> opciones;
+    private Integer filas;
+    private List<String> columnas;
 
     public static FormularioCampoResponse fromEntity(Formulario.CampoFormulario campo) {
-        return new FormularioCampoResponse(
-                campo.getNombre(),
-                campo.getEtiqueta(),
-                campo.getTipo(),
-                campo.getRequerido(),
-                campo.getEsCampoPrioridad(),
-                campo.getOpciones()
-        );
+        FormularioCampoResponse r = new FormularioCampoResponse();
+        r.setNombre(campo.getNombre());
+        r.setEtiqueta(campo.getEtiqueta());
+        r.setTipo(campo.getTipo());
+        r.setRequerido(campo.getRequerido());
+        r.setEsCampoPrioridad(campo.getEsCampoPrioridad());
+        r.setOpciones(campo.getOpciones());
+        r.setFilas(campo.getFilas());
+        r.setColumnas(campo.getColumnas());
+        return r;
     }
 }

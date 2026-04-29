@@ -42,9 +42,14 @@ public class Formulario {
     public static class CampoFormulario {
         private String nombre;
         private String etiqueta;
+        /** TEXTO | TEXTAREA | NUMERO | FECHA | SELECCION | RADIO | CHECKBOX | ARCHIVO | IMAGEN | ETIQUETA | GRID */
         private String tipo;
         private Boolean requerido;
         private Boolean esCampoPrioridad;
         private List<String> opciones;
+        /** Número de filas visibles (solo TEXTAREA) */
+        private Integer filas;
+        /** Nombres de columnas (solo GRID) */
+        private List<String> columnas;
     }
 }

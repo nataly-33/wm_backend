@@ -16,4 +16,6 @@ public class FormularioCampoRequest {
     private Boolean requerido;
     private Boolean esCampoPrioridad;
     private List<String> opciones;
+    private Integer filas;
+    private List<String> columnas;
 }

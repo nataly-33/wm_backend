@@ -80,6 +80,8 @@ public class FormularioService {
                 .requerido(campo.getRequerido())
                 .esCampoPrioridad(campo.getEsCampoPrioridad())
                 .opciones(campo.getOpciones())
+                .filas(campo.getFilas())
+                .columnas(campo.getColumnas())
                 .build()).toList();
     }
 
