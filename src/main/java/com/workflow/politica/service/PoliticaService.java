@@ -21,6 +21,7 @@ import com.workflow.transicion.repository.TransicionRepository;
 import com.workflow.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
@@ -49,6 +50,7 @@ public class PoliticaService {
     private final DepartamentoRepository departamentoRepository;
     private final VersionHistorialRepository versionHistorialRepository;
     private final UsuarioRepository usuarioRepository;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public PoliticaResponse crear(String empresaId, String userId, CrearPoliticaRequest request) {
         Politica politica = Politica.builder()
@@ -323,6 +325,17 @@ public class PoliticaService {
         registrarVersion(guardada, userId, "DIAGRAMA",
                 "Diagrama guardado — " + nNodosFinales + " nodos, " + nTransFinales + " transiciones",
                 nNodosFinales, nTransFinales);
+
+        // Emitir evento colaborativo: otros editores abiertos recibirán esto
+        String nombreEditor = usuarioRepository.findById(userId)
+                .map(u -> u.getNombre()).orElse("Un usuario");
+        Map<String, Object> eventoColaborativo = new HashMap<>();
+        eventoColaborativo.put("tipo", "DIAGRAMA_GUARDADO");
+        eventoColaborativo.put("politicaId", politicaId);
+        eventoColaborativo.put("version", guardada.getVersion());
+        eventoColaborativo.put("guardadoPor", userId);
+        eventoColaborativo.put("nombreEditor", nombreEditor);
+        messagingTemplate.convertAndSend("/topic/diagrama/" + politicaId, eventoColaborativo);
 
         return PoliticaResponse.fromEntity(guardada);
     }

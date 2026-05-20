@@ -90,8 +90,19 @@ public class DataSeeder {
 
         Usuario adminGen = usuarioRepository.save(Usuario.builder()
                 .empresaId(empresa.getId())
-                .nombre("Admin General Seeder")
+                .nombre("Admin General")
                 .email("admin@cre.bo")
+                .passwordHash(passwordEncoder.encode("Admin123!"))
+                .rol("ADMIN_GENERAL")
+                .activo(true)
+                .creadoEn(LocalDateTime.now())
+                .build());
+
+        // Segundo administrador — para demostrar edición colaborativa de diagramas
+        usuarioRepository.save(Usuario.builder()
+                .empresaId(empresa.getId())
+                .nombre("Admin General 2")
+                .email("admin2@cre.bo")
                 .passwordHash(passwordEncoder.encode("Admin123!"))
                 .rol("ADMIN_GENERAL")
                 .activo(true)
