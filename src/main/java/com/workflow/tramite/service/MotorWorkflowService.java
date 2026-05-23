@@ -1,5 +1,6 @@
 package com.workflow.tramite.service;
 
+import com.workflow.agente.service.AgenteService;
 import com.workflow.departamento.model.Departamento;
 import com.workflow.departamento.repository.DepartamentoRepository;
 import com.workflow.ejecucion.model.EjecucionNodo;
@@ -21,6 +22,8 @@ import com.workflow.usuario.model.Usuario;
 import com.workflow.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -47,6 +50,10 @@ public class MotorWorkflowService {
     private final DepartamentoRepository departamentoRepository;
     private final FormularioRepository formularioRepository;
     private final PoliticaRepository politicaRepository;
+
+    @Autowired
+    @Lazy
+    private AgenteService agenteService;
 
     public Tramite iniciarTramite(Tramite tramite, String nodoInicioId) {
         tramite.setEstadoGeneral("PENDIENTE");
@@ -139,6 +146,13 @@ public class MotorWorkflowService {
         tramite.setEstadoGeneral("RECHAZADO");
         tramite.setFinalizadoEn(LocalDateTime.now());
         tramiteRepository.save(tramite);
+
+        // Notificar al cliente via agente conversacional
+        try {
+            agenteService.notificarClienteDecision(tramite.getId(), "RECHAZADO", null);
+        } catch (Exception e) {
+            log.warn("No se pudo notificar al cliente via agente: {}", e.getMessage());
+        }
 
         notificarAdminsGenerales(
                 tramite.getEmpresaId(),
@@ -481,6 +495,13 @@ public class MotorWorkflowService {
         tramite.setEstadoGeneral("COMPLETADO");
         tramite.setFinalizadoEn(LocalDateTime.now());
         tramiteRepository.save(tramite);
+
+        // Notificar al cliente via agente conversacional
+        try {
+            agenteService.notificarClienteDecision(tramite.getId(), "COMPLETADO", null);
+        } catch (Exception e) {
+            log.warn("No se pudo notificar al cliente via agente (completado): {}", e.getMessage());
+        }
 
         notificacionService.crearNotificacion(
                 tramite.getIniciadoPor(),
