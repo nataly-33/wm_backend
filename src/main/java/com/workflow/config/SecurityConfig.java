@@ -46,6 +46,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/seeder/**").permitAll()
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/seeder/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/archivos/**").permitAll()
+                        // Endpoints del cliente (rol CLIENTE y autenticados)
+                        .requestMatchers("/api/v1/cliente/**").authenticated()
                         .requestMatchers("/ws", "/ws/**").permitAll()
                         .requestMatchers("/ws-native", "/ws-native/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()

@@ -29,7 +29,7 @@ public class Usuario {
 
     private String passwordHash;
 
-    private String rol; // ADMIN_GENERAL, ADMIN_DEPARTAMENTO, FUNCIONARIO
+    private String rol; // ADMIN_GENERAL, ADMIN_DEPARTAMENTO, FUNCIONARIO, CLIENTE
 
     private String departamentoId; // null si es Admin General
 
