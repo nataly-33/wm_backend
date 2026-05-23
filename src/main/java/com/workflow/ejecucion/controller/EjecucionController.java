@@ -1,6 +1,7 @@
 package com.workflow.ejecucion.controller;
 
 import com.workflow.ejecucion.dto.EjecucionDetalladaResponse;
+import com.workflow.ejecucion.dto.FormularioRellenadoResponse;
 import com.workflow.ejecucion.model.EjecucionNodo;
 import com.workflow.ejecucion.service.EjecucionService;
 import lombok.RequiredArgsConstructor;
@@ -69,6 +70,20 @@ public class EjecucionController {
             String observaciones = (String) body.get("observaciones");
             ejecucionService.rechazar(id, observaciones);
             return ResponseEntity.ok(Map.of("message", "Ejecución rechazada"));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /**
+     * Historial de formularios rellenados en un tramite.
+     * Accesible para ADMIN_GENERAL y FUNCIONARIO.
+     */
+    @GetMapping("/tramite/{tramiteId}/historial-formularios")
+    public ResponseEntity<?> historialFormularios(@PathVariable String tramiteId) {
+        try {
+            List<FormularioRellenadoResponse> historial = ejecucionService.obtenerHistorialFormularios(tramiteId);
+            return ResponseEntity.ok(Map.of("data", historial));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         }

@@ -2,9 +2,13 @@ package com.workflow.ejecucion.service;
 
 import com.workflow.departamento.model.Departamento;
 import com.workflow.departamento.repository.DepartamentoRepository;
+import com.workflow.ejecucion.dto.CampoRellenadoDto;
 import com.workflow.ejecucion.dto.EjecucionDetalladaResponse;
+import com.workflow.ejecucion.dto.FormularioRellenadoResponse;
 import com.workflow.ejecucion.model.EjecucionNodo;
 import com.workflow.ejecucion.repository.EjecucionNodoRepository;
+import com.workflow.formulario.model.Formulario;
+import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
 import com.workflow.politica.model.Politica;
@@ -12,11 +16,14 @@ import com.workflow.politica.repository.PoliticaRepository;
 import com.workflow.tramite.model.Tramite;
 import com.workflow.tramite.repository.TramiteRepository;
 import com.workflow.tramite.service.MotorWorkflowService;
+import com.workflow.usuario.model.Usuario;
+import com.workflow.usuario.repository.UsuarioRepository;
 import lombok.extern.slf4j.Slf4j;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -33,6 +40,8 @@ public class EjecucionService {
     private final TramiteRepository tramiteRepository;
     private final PoliticaRepository politicaRepository;
     private final DepartamentoRepository departamentoRepository;
+    private final FormularioRepository formularioRepository;
+    private final UsuarioRepository usuarioRepository;
 
     public List<EjecucionNodo> listarPorDepartamento(String departamentoId) {
         return ejecucionNodoRepository.findByDepartamentoIdAndEstadoIn(
@@ -185,6 +194,92 @@ public class EjecucionService {
     public EjecucionNodo obtener(String id) {
         return ejecucionNodoRepository.findById(id)
             .orElseThrow(() -> new RuntimeException("Ejecución no encontrada"));
+    }
+
+    public List<FormularioRellenadoResponse> obtenerHistorialFormularios(String tramiteId) {
+        List<EjecucionNodo> ejecuciones = ejecucionNodoRepository.findByTramiteIdOrderByIniciadoEnDesc(tramiteId);
+
+        // Ordenar cronologicamente (mas antigua primero)
+        List<EjecucionNodo> ordenadas = ejecuciones.stream()
+                .filter(e -> "COMPLETADO".equals(e.getEstado()))
+                .sorted(Comparator.comparing(
+                        EjecucionNodo::getCompletadoEn,
+                        Comparator.nullsLast(Comparator.naturalOrder())
+                ))
+                .collect(Collectors.toList());
+
+        List<FormularioRellenadoResponse> resultado = new ArrayList<>();
+
+        for (EjecucionNodo ejecucion : ordenadas) {
+            String nombreNodo = ejecucion.getNodoId();
+            String deptoNombre = null;
+            String funcionarioNombre = null;
+
+            // Buscar nodo
+            Optional<Nodo> nodoOpt = nodoRepository.findById(ejecucion.getNodoId());
+            if (nodoOpt.isPresent()) {
+                Nodo nodo = nodoOpt.get();
+                nombreNodo = nodo.getNombre();
+                if (nodo.getDepartamentoId() != null) {
+                    deptoNombre = departamentoRepository.findById(nodo.getDepartamentoId())
+                            .map(Departamento::getNombre).orElse(nodo.getDepartamentoId());
+                }
+            }
+
+            // Buscar funcionario
+            if (ejecucion.getFuncionarioId() != null) {
+                Optional<Usuario> usuarioOpt = usuarioRepository.findById(ejecucion.getFuncionarioId());
+                if (usuarioOpt.isPresent()) {
+                    funcionarioNombre = usuarioOpt.get().getNombre();
+                }
+            }
+
+            // Mapear campos del formulario
+            List<CampoRellenadoDto> camposRellenados = new ArrayList<>();
+            Optional<Formulario> formOpt = formularioRepository.findByNodoIdAndActivoTrue(ejecucion.getNodoId());
+            if (formOpt.isPresent() && ejecucion.getRespuestaFormulario() != null) {
+                Formulario formulario = formOpt.get();
+                Map<String, Object> respuesta = ejecucion.getRespuestaFormulario();
+                if (formulario.getCampos() != null) {
+                    for (Formulario.CampoFormulario campo : formulario.getCampos()) {
+                        Object valor = respuesta.get(campo.getNombre());
+                        boolean esArchivo = "ARCHIVO".equals(campo.getTipo()) || "IMAGEN".equals(campo.getTipo());
+                        camposRellenados.add(CampoRellenadoDto.builder()
+                                .nombre(campo.getNombre())
+                                .etiqueta(campo.getEtiqueta() != null ? campo.getEtiqueta() : campo.getNombre())
+                                .tipo(campo.getTipo())
+                                .valor(valor)
+                                .esArchivo(esArchivo)
+                                .build());
+                    }
+                }
+            } else if (ejecucion.getRespuestaFormulario() != null) {
+                // Sin formulario definido — mostrar campos directamente del mapa
+                for (Map.Entry<String, Object> entry : ejecucion.getRespuestaFormulario().entrySet()) {
+                    camposRellenados.add(CampoRellenadoDto.builder()
+                            .nombre(entry.getKey())
+                            .etiqueta(entry.getKey())
+                            .tipo("TEXTO")
+                            .valor(entry.getValue())
+                            .esArchivo(false)
+                            .build());
+                }
+            }
+
+            resultado.add(FormularioRellenadoResponse.builder()
+                    .ejecucionId(ejecucion.getId())
+                    .nodoId(ejecucion.getNodoId())
+                    .nombreNodo(nombreNodo)
+                    .departamentoNombre(deptoNombre)
+                    .funcionarioNombre(funcionarioNombre)
+                    .estado(ejecucion.getEstado())
+                    .completadoEn(ejecucion.getCompletadoEn())
+                    .observaciones(ejecucion.getObservaciones())
+                    .campos(camposRellenados)
+                    .build());
+        }
+
+        return resultado;
     }
 
     public EjecucionNodo reasignar(String id, String funcionarioId) {
