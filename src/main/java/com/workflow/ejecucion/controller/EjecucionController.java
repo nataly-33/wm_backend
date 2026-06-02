@@ -1,11 +1,21 @@
 package com.workflow.ejecucion.controller;
 
+import com.workflow.ejecucion.dto.CampoConValor;
 import com.workflow.ejecucion.dto.EjecucionDetalladaResponse;
 import com.workflow.ejecucion.dto.FormularioRellenadoResponse;
+import com.workflow.ejecucion.dto.VistaFuncionarioResponse;
 import com.workflow.ejecucion.model.EjecucionNodo;
 import com.workflow.ejecucion.service.EjecucionService;
+import com.workflow.formulario.model.Formulario;
+import com.workflow.formulario.model.Formulario.CampoFormulario;
+import com.workflow.formulario.model.LlenadoPor;
+import com.workflow.formulario.repository.FormularioRepository;
+import com.workflow.ejecucion.repository.EjecucionNodoRepository;
+import com.workflow.tramite.service.MotorWorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -16,6 +26,9 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class EjecucionController {
     private final EjecucionService ejecucionService;
+    private final MotorWorkflowService motorWorkflowService;
+    private final EjecucionNodoRepository ejecucionNodoRepository;
+    private final FormularioRepository formularioRepository;
 
     @GetMapping("/departamento/{departamentoId}")
     public ResponseEntity<?> listarPorDepartamento(@PathVariable String departamentoId) {
@@ -108,6 +121,64 @@ public class EjecucionController {
             return ResponseEntity.ok(Map.of("message", "Ejecución reasignada", "data", actualizada));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        }
+    }
+
+    /** El funcionario revisa y aprueba/rechaza el nodo. */
+    @PutMapping("/{id}/funcionario-completar")
+    public ResponseEntity<?> funcionarioCompletar(
+            @PathVariable String id,
+            @RequestBody Map<String, Object> respuestas,
+            @AuthenticationPrincipal UserDetails user) {
+        try {
+            String username = user != null ? user.getUsername() : null;
+            motorWorkflowService.funcionarioCompletadoNodo(id, respuestas, username);
+            return ResponseEntity.ok(Map.of("mensaje", "Nodo completado por funcionario"));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.badRequest().body(Map.of("mensaje", e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("mensaje", e.getMessage()));
+        }
+    }
+
+    /** Vista del funcionario: campos del cliente (con valores) + campos que él debe rellenar. */
+    @GetMapping("/{id}/vista-funcionario")
+    public ResponseEntity<?> vistaFuncionario(@PathVariable String id) {
+        try {
+            EjecucionNodo ejec = ejecucionNodoRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Ejecución no encontrada"));
+
+            Formulario form = formularioRepository.findByNodoId(ejec.getNodoId())
+                    .orElseThrow(() -> new RuntimeException("Formulario no encontrado para el nodo"));
+
+            Map<String, Object> respuestasCliente = ejec.getRespuestasCliente() != null
+                    ? ejec.getRespuestasCliente()
+                    : Map.of();
+
+            List<CampoConValor> camposCliente = form.getCampos() == null ? List.of() :
+                    form.getCampos().stream()
+                            .filter(c -> c.getLlenadoPor() == LlenadoPor.CLIENTE)
+                            .map(c -> CampoConValor.builder()
+                                    .campo(c)
+                                    .valor(respuestasCliente.get(c.getNombre()))
+                                    .build())
+                            .toList();
+
+            List<CampoFormulario> camposFuncionario = form.getCampos() == null ? List.of() :
+                    form.getCampos().stream()
+                            .filter(c -> c.getLlenadoPor() == null || c.getLlenadoPor() == LlenadoPor.FUNCIONARIO)
+                            .toList();
+
+            VistaFuncionarioResponse vista = VistaFuncionarioResponse.builder()
+                    .ejecucionId(id)
+                    .fase(ejec.getFase() != null ? ejec.getFase().toString() : null)
+                    .camposCliente(camposCliente)
+                    .camposFuncionario(camposFuncionario)
+                    .build();
+
+            return ResponseEntity.ok(vista);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("mensaje", e.getMessage()));
         }
     }
 }

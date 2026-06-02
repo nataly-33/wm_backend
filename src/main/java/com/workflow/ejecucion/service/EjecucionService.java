@@ -5,6 +5,8 @@ import com.workflow.departamento.repository.DepartamentoRepository;
 import com.workflow.ejecucion.dto.CampoRellenadoDto;
 import com.workflow.ejecucion.dto.EjecucionDetalladaResponse;
 import com.workflow.ejecucion.dto.FormularioRellenadoResponse;
+import com.workflow.ejecucion.dto.NodoHistorialResponse;
+import com.workflow.formulario.model.LlenadoPor;
 import com.workflow.ejecucion.model.EjecucionNodo;
 import com.workflow.ejecucion.repository.EjecucionNodoRepository;
 import com.workflow.formulario.model.Formulario;
@@ -280,6 +282,83 @@ public class EjecucionService {
         }
 
         return resultado;
+    }
+
+    public List<NodoHistorialResponse> obtenerHistorialCompleto(String tramiteId, String usuarioId) {
+        List<EjecucionNodo> ejecuciones = ejecucionNodoRepository
+                .findByTramiteIdOrderByCreadoEnAsc(tramiteId);
+
+        Usuario solicitante = usuarioRepository.findById(usuarioId).orElseThrow();
+
+        return ejecuciones.stream()
+                .filter(e -> puedeVerEjecucion(e, solicitante))
+                .map(e -> {
+                    Nodo nodo = nodoRepository.findById(e.getNodoId()).orElse(null);
+                    Formulario form = formularioRepository.findByNodoId(e.getNodoId()).orElse(null);
+                    Usuario funcionario = e.getFuncionarioId() != null
+                            ? usuarioRepository.findById(e.getFuncionarioId()).orElse(null) : null;
+
+                    List<CampoRellenadoDto> camposCliente = mapearCampos(
+                            form, e.getRespuestasCliente(), LlenadoPor.CLIENTE);
+                    List<CampoRellenadoDto> camposFuncionario = mapearCampos(
+                            form, e.getRespuestasFuncionario(), LlenadoPor.FUNCIONARIO);
+
+                    String deptoNombre = "";
+                    if (nodo != null && nodo.getDepartamentoId() != null) {
+                        deptoNombre = departamentoRepository.findById(nodo.getDepartamentoId())
+                                .map(Departamento::getNombre)
+                                .orElse(nodo.getDepartamentoId());
+                    }
+
+                    return NodoHistorialResponse.builder()
+                            .ejecucionId(e.getId())
+                            .nodoId(e.getNodoId())
+                            .nodoNombre(nodo != null ? nodo.getNombre() : "")
+                            .departamento(deptoNombre)
+                            .fase(e.getFase() != null ? e.getFase().toString() : "")
+                            .estado(e.getEstado() != null ? e.getEstado() : "")
+                            .camposCliente(camposCliente)
+                            .camposFuncionario(camposFuncionario)
+                            .funcionarioNombre(funcionario != null ? funcionario.getNombre() : "Pendiente")
+                            .clienteCompletadoEn(e.getClienteCompletadoEn())
+                            .funcionarioCompletadoEn(e.getFuncionarioCompletadoEn())
+                            .creadoEn(e.getCreadoEn())
+                            .build();
+                })
+                .toList();
+    }
+
+    private boolean puedeVerEjecucion(EjecucionNodo e, Usuario solicitante) {
+        if ("ADMIN_GENERAL".equals(solicitante.getRol())) return true;
+        if ("ADMIN_DEPARTAMENTO".equals(solicitante.getRol())) {
+            Nodo nodo = nodoRepository.findById(e.getNodoId()).orElse(null);
+            return nodo != null && solicitante.getDepartamentoId() != null
+                    && solicitante.getDepartamentoId().equals(nodo.getDepartamentoId());
+        }
+        return solicitante.getId().equals(e.getFuncionarioId());
+    }
+
+    private List<CampoRellenadoDto> mapearCampos(Formulario form,
+                                                  Map<String, Object> respuestas,
+                                                  LlenadoPor filtro) {
+        if (form == null || respuestas == null || form.getCampos() == null) return List.of();
+
+        return form.getCampos().stream()
+                .filter(c -> filtro.equals(c.getLlenadoPor()))
+                .map(c -> {
+                    Object valor = respuestas.get(c.getNombre());
+                    boolean esArchivo = "ARCHIVO".equals(c.getTipo()) || "IMAGEN".equals(c.getTipo());
+                    boolean esTablaGrid = "TABLA_GRID".equals(c.getTipo()) || "GRID".equals(c.getTipo());
+                    return CampoRellenadoDto.builder()
+                            .nombre(c.getNombre())
+                            .etiqueta(c.getEtiqueta() != null ? c.getEtiqueta() : c.getNombre())
+                            .tipo(c.getTipo())
+                            .valor(valor)
+                            .esArchivo(esArchivo)
+                            .esTablaGrid(esTablaGrid)
+                            .build();
+                })
+                .toList();
     }
 
     public EjecucionNodo reasignar(String id, String funcionarioId) {

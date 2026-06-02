@@ -48,4 +48,29 @@ public class EjecucionNodo {
     private LocalDateTime completadoEn;
 
     private String observaciones;
+
+    // ─── Campos de las dos fases ──────────────────────────────────────────────
+
+    private FaseNodo fase;
+
+    @Field("respuestas_cliente")
+    private Map<String, Object> respuestasCliente;
+
+    @Field("respuestas_funcionario")
+    private Map<String, Object> respuestasFuncionario;
+
+    @Field("cliente_completado_en")
+    private LocalDateTime clienteCompletadoEn;
+
+    @Field("funcionario_completado_en")
+    private LocalDateTime funcionarioCompletadoEn;
+
+    @Field("cliente_id")
+    private String clienteId;
+
+    @Field("politica_id")
+    private String politicaId;
+
+    @Field("creado_en")
+    private LocalDateTime creadoEn;
 }

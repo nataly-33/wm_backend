@@ -1,10 +1,12 @@
 package com.workflow.ejecucion.repository;
 
 import com.workflow.ejecucion.model.EjecucionNodo;
+import com.workflow.ejecucion.model.FaseNodo;
 import org.springframework.data.mongodb.repository.MongoRepository;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface EjecucionNodoRepository extends MongoRepository<EjecucionNodo, String> {
@@ -19,4 +21,9 @@ public interface EjecucionNodoRepository extends MongoRepository<EjecucionNodo, 
     long countByFuncionarioIdAndEstadoIn(String funcionarioId, List<String> estados);
     List<EjecucionNodo> findByNodoIdAndEstadoIn(String nodoId, List<String> estados);
     List<EjecucionNodo> findByNodoId(String nodoId);
+
+    Optional<EjecucionNodo> findByTramiteIdAndNodoIdAndFase(String tramiteId, String nodoId, FaseNodo fase);
+    List<EjecucionNodo> findByFuncionarioIdAndFase(String funcionarioId, FaseNodo fase);
+    List<EjecucionNodo> findByTramiteIdOrderByCreadoEnAsc(String tramiteId);
+    Optional<EjecucionNodo> findFirstByTramiteIdAndEstadoOrderByCreadoEnDesc(String tramiteId, String estado);
 }

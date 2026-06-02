@@ -1,5 +1,6 @@
 package com.workflow.ejecucion.dto;
 
+import com.workflow.formulario.model.Formulario.CampoFormulario;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -9,11 +10,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class CampoRellenadoDto {
-    private String nombre;
-    private String etiqueta;
-    private String tipo;
+public class CampoConValor {
+    private CampoFormulario campo;
     private Object valor;
-    private boolean esArchivo;
-    private boolean esTablaGrid;
 }
