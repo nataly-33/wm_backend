@@ -80,7 +80,7 @@ public class DataSeeder {
         }
         log.info("Ejecutando seeder manual CRE Bolivia...");
         sembrarDatos();
-        return "Seeder CRE Bolivia aplicado con exito. Usuario principal: admin@cre.com.bo / Admin123!";
+        return "Seeder CRE Bolivia aplicado con exito. Credenciales: admin@cre.bo / Admin123!";
     }
 
     // =========================================================
@@ -101,42 +101,57 @@ public class DataSeeder {
         Departamento dLegal    = crearDepto(empresa.getId(), "Departamento Legal",    "Contratos y observaciones legales.");
         Departamento dRrhh     = crearDepto(empresa.getId(), "Recursos Humanos",      "Personal y escalamiento interno.");
 
-        // --- Admin General ---
-        crearUsuario(empresa.getId(), "Jorge Martínez",   "admin@cre.com.bo",             "Admin123!", "ADMIN_GENERAL",      null,           null);
+        // --- Admins Generales ---
+        crearUsuario(empresa.getId(), "Jorge Martínez",  "admin@cre.bo",  "Admin123!", "ADMIN_GENERAL", null, null);
+        crearUsuario(empresa.getId(), "Laura Gutierrez", "admin2@cre.bo", "Admin123!", "ADMIN_GENERAL", null, null);
 
         // --- Admins por departamento ---
-        Usuario uMaria     = crearUsuario(empresa.getId(), "María Fernández",  "maria.fernandez@cre.com.bo",  "Admin123!", "ADMIN_DEPARTAMENTO", dAtencion.getId(), null);
-        Usuario uLuis      = crearUsuario(empresa.getId(), "Luis Pedraza",     "luis.pedraza@cre.com.bo",     "Admin123!", "ADMIN_DEPARTAMENTO", dTecnico.getId(),  null);
-        Usuario uCarmen    = crearUsuario(empresa.getId(), "Carmen Jordán",    "carmen.jordan@cre.com.bo",    "Admin123!", "ADMIN_DEPARTAMENTO", dFact.getId(),     null);
-        Usuario uPatricia  = crearUsuario(empresa.getId(), "Patricia Vásquez", "patricia.vasquez@cre.com.bo", "Admin123!", "ADMIN_DEPARTAMENTO", dLegal.getId(),    null);
+        Usuario uAdminAtencion = crearUsuario(empresa.getId(), "María Fernández", "admin.atencion@cre.bo", "Admin123!", "ADMIN_DEPARTAMENTO", dAtencion.getId(), null);
+        Usuario uAdminTecnico  = crearUsuario(empresa.getId(), "Luis Pedraza",    "admin.tecnico@cre.bo",  "Admin123!", "ADMIN_DEPARTAMENTO", dTecnico.getId(),  null);
 
-        dAtencion.setAdminDepartamentoId(uMaria.getId());
+        dAtencion.setAdminDepartamentoId(uAdminAtencion.getId());
         departamentoRepository.save(dAtencion);
-        dTecnico.setAdminDepartamentoId(uLuis.getId());
+        dTecnico.setAdminDepartamentoId(uAdminTecnico.getId());
         departamentoRepository.save(dTecnico);
-        dFact.setAdminDepartamentoId(uCarmen.getId());
-        departamentoRepository.save(dFact);
-        dLegal.setAdminDepartamentoId(uPatricia.getId());
-        departamentoRepository.save(dLegal);
-        // dRrhh no tiene admin asignado inicialmente
+        // dFact, dLegal, dRrhh sin admin asignado inicialmente
 
         // --- Funcionarios ---
-        crearUsuario(empresa.getId(), "Carlos Vaca",     "carlos.vaca@cre.com.bo",     "Func123!", "FUNCIONARIO", dAtencion.getId(), null);
-        crearUsuario(empresa.getId(), "Ana Romero",      "ana.romero@cre.com.bo",      "Func123!", "FUNCIONARIO", dAtencion.getId(), null);
-        crearUsuario(empresa.getId(), "Roberto Suárez",  "roberto.suarez@cre.com.bo",  "Func123!", "FUNCIONARIO", dTecnico.getId(),  null);
-        crearUsuario(empresa.getId(), "Diego Montero",   "diego.montero@cre.com.bo",   "Func123!", "FUNCIONARIO", dFact.getId(),     null);
-        crearUsuario(empresa.getId(), "Fernando Castro", "fernando.castro@cre.com.bo", "Func123!", "FUNCIONARIO", dLegal.getId(),    null);
+        crearUsuario(empresa.getId(), "Carlos Vaca",    "func1.atencion@cre.bo", "Func123!", "FUNCIONARIO", dAtencion.getId(), null);
+        crearUsuario(empresa.getId(), "Ana Romero",     "func2.atencion@cre.bo", "Func123!", "FUNCIONARIO", dAtencion.getId(), null);
+        crearUsuario(empresa.getId(), "Roberto Suárez", "func1.tecnico@cre.bo",  "Func123!", "FUNCIONARIO", dTecnico.getId(),  null);
 
         // --- Clientes ---
-        crearUsuario(empresa.getId(), "Kevin Torres", "kevin.torres@gmail.com", "Cliente123!", "CLIENTE", null, null);
-        crearUsuario(empresa.getId(), "Sandra Pérez", "sandra.perez@gmail.com", "Cliente123!", "CLIENTE", null, null);
-        crearUsuario(empresa.getId(), "Miguel Rojas",  "miguel.rojas@gmail.com", "Cliente123!", "CLIENTE", null, null);
+        crearUsuario(empresa.getId(), "Kevin Torres", "cliente1@cre.bo", "Cliente123!", "CLIENTE", null, null);
+        crearUsuario(empresa.getId(), "Sandra Pérez", "cliente2@cre.bo", "Cliente123!", "CLIENTE", null, null);
 
         // --- Políticas ---
         sembrarPolitica1(empresa, dAtencion, dTecnico, dFact, dLegal);
         sembrarPolitica2(empresa, dAtencion, dTecnico, dFact);
         sembrarPolitica3(empresa, dAtencion, dFact, dRrhh);
         sembrarPolitica4(empresa, dAtencion, dLegal, dFact);
+
+        // ========================================
+        //   CREDENCIALES DEL SISTEMA - CRE
+        // ========================================
+        log.info("");
+        log.info("========================================");
+        log.info("  CREDENCIALES DEL SISTEMA - CRE");
+        log.info("========================================");
+        log.info("  ADMIN GENERAL:");
+        log.info("    admin@cre.bo  / Admin123!");
+        log.info("    admin2@cre.bo / Admin123!");
+        log.info("  ADMIN DEPARTAMENTO:");
+        log.info("    admin.atencion@cre.bo / Admin123!");
+        log.info("    admin.tecnico@cre.bo  / Admin123!");
+        log.info("  FUNCIONARIO:");
+        log.info("    func1.atencion@cre.bo / Func123!");
+        log.info("    func2.atencion@cre.bo / Func123!");
+        log.info("    func1.tecnico@cre.bo  / Func123!");
+        log.info("  CLIENTE:");
+        log.info("    cliente1@cre.bo / Cliente123!");
+        log.info("    cliente2@cre.bo / Cliente123!");
+        log.info("========================================");
+        log.info("");
     }
 
     // =========================================================

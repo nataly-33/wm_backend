@@ -217,6 +217,18 @@ El proyecto usa **MongoDB** con las siguientes colecciones principales:
 
 ---
 
+## Credenciales (seeder)
+
+Rol	                  Email	                Password
+ADMIN_GENERAL	      admin@cre.bo	          Admin123!
+ADMIN_GENERAL	      admin2@cre.bo	          Admin123!
+ADMIN_DEPARTAMENTO	admin.atencion@cre.bo	  Admin123!
+ADMIN_DEPARTAMENTO	admin.tecnico@cre.bo	  Admin123!
+FUNCIONARIO	        func1.atencion@cre.bo	  Func123!
+FUNCIONARIO	        func1.tecnico@cre.bo	  Func123!
+CLIENTE	            cliente1@cre.bo	        Cliente123!
+
+
 ## Despliegue en Azure
 
 El backend se despliega en **Azure App Service** (Java 17, Linux):
