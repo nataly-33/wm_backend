@@ -27,8 +27,10 @@ public class DocumentoService {
 
     public DocumentoResponse subirDocumento(MultipartFile archivo, DocumentoRequest request,
                                              String usuarioId, String usuarioNombre) throws IOException {
-        String url = s3Service.subirArchivo(archivo, request.getEmpresaId(), request.getPoliticaId(), request.getTramiteId());
-        String key = s3Service.construirKey(request.getEmpresaId(), request.getPoliticaId(), request.getTramiteId(), archivo.getOriginalFilename());
+        String url = s3Service.subirArchivo(archivo, request.getEmpresaId(),
+                request.getPoliticaId(), request.getTramiteId(), "documentos");
+        String key = s3Service.construirKey(request.getEmpresaId(), request.getPoliticaId(),
+                request.getTramiteId(), "documentos", archivo.getOriginalFilename());
 
         VersionDocumento primeraVersion = VersionDocumento.builder()
             .version(1).urlArchivo(url).s3Key(key)
@@ -62,8 +64,10 @@ public class DocumentoService {
         Documento doc = documentoRepo.findById(documentoId)
             .orElseThrow(() -> new RuntimeException("Documento no encontrado: " + documentoId));
 
-        String url = s3Service.subirArchivo(archivo, doc.getEmpresaId(), doc.getPoliticaId(), doc.getTramiteId());
-        String key = s3Service.construirKey(doc.getEmpresaId(), doc.getPoliticaId(), doc.getTramiteId(), archivo.getOriginalFilename());
+        String url = s3Service.subirArchivo(archivo, doc.getEmpresaId(),
+                doc.getPoliticaId(), doc.getTramiteId(), "documentos");
+        String key = s3Service.construirKey(doc.getEmpresaId(), doc.getPoliticaId(),
+                doc.getTramiteId(), "documentos", archivo.getOriginalFilename());
 
         int nuevaVersion = doc.getVersion() + 1;
         VersionDocumento version = VersionDocumento.builder()
