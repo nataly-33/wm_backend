@@ -89,7 +89,30 @@ public class AgenteService {
         return guardarYRetornar(conversacion, respuesta);
     }
 
+    private static final List<String> AFIRMACIONES = List.of(
+            "si", "sí", "yes", "correcto", "exacto", "claro", "ok", "dale",
+            "eso es", "eso quiero", "eso mismo", "afirmativo", "asi es",
+            "perfecto", "confirmo", "quiero ese", "ese tramite", "eso"
+    );
+
     private Map<String, Object> manejarDeteccionPolitica(ConversacionAgente conv, String mensaje, String clienteId) {
+        String textoLower = mensaje.toLowerCase().trim();
+
+        // Si el usuario confirma con una palabra afirmativa y ya hay una politica candidata guardada,
+        // tratar como confirmacion directa sin volver a llamar al LLM
+        Map<String, Object> datosActuales = conv.getDatosRecopilados() != null
+                ? conv.getDatosRecopilados() : new HashMap<>();
+        String politicaCandidataId = (String) datosActuales.get("politicaIdPropuesta");
+        boolean esAfirmacion = AFIRMACIONES.stream().anyMatch(a ->
+                textoLower.equals(a) || textoLower.startsWith(a + ",") || textoLower.startsWith(a + " "))
+                || (textoLower.contains("si") && textoLower.length() <= 12);
+
+        if (esAfirmacion && politicaCandidataId != null && !politicaCandidataId.isBlank()) {
+            // Confirmar la politica candidata directamente
+            conv.setPoliticaId(politicaCandidataId);
+            return iniciarRecopilacionNodo(conv);
+        }
+
         // Obtener empresaId desde algun tramite previo del cliente o usar busqueda general
         List<Politica> politicas = politicaRepository.findAll().stream()
                 .filter(p -> Boolean.TRUE.equals(p.getActivo()) && "ACTIVA".equals(p.getEstado()))
@@ -131,12 +154,53 @@ public class AgenteService {
             @SuppressWarnings("unchecked")
             Map<String, Object> politicaSugerida = (Map<String, Object>) iaResponse.get("politica_sugerida");
 
-            if (Boolean.TRUE.equals(necesitaMasInfo) || politicaSugerida == null) {
+            // Intentar resolver la politica por politica_id si politica_sugerida vino null
+            if (politicaSugerida == null) {
+                String politicaIdRaw = iaResponse.get("politica_id") != null
+                        ? iaResponse.get("politica_id").toString() : null;
+                if (politicaIdRaw != null && !politicaIdRaw.isBlank() && !"null".equals(politicaIdRaw)) {
+                    String finalPoliticaId = politicaIdRaw;
+                    politicaSugerida = politicas.stream()
+                            .filter(p -> finalPoliticaId.equals(p.getId()))
+                            .map(p -> {
+                                Map<String, Object> m = new HashMap<>();
+                                m.put("id", p.getId());
+                                m.put("nombre", p.getNombre());
+                                return m;
+                            })
+                            .findFirst().orElse(null);
+                }
+            }
+
+            // Si aun no hay politica sugerida pero la IA devolvio nombre, buscar por nombre parcial
+            if (politicaSugerida == null) {
+                String nombreDetectado = iaResponse.get("politica_detectada") != null
+                        ? iaResponse.get("politica_detectada").toString() : null;
+                if (nombreDetectado != null && !nombreDetectado.isBlank() && !"null".equals(nombreDetectado)) {
+                    String nombreLower = nombreDetectado.toLowerCase();
+                    politicaSugerida = politicas.stream()
+                            .filter(p -> p.getNombre() != null && p.getNombre().toLowerCase().contains(
+                                    nombreLower.length() > 6 ? nombreLower.substring(0, 6) : nombreLower))
+                            .map(p -> {
+                                Map<String, Object> m = new HashMap<>();
+                                m.put("id", p.getId());
+                                m.put("nombre", p.getNombre());
+                                return m;
+                            })
+                            .findFirst().orElse(null);
+                }
+            }
+
+            // Si no hay politica resuelta (ni por id ni por nombre), pedir mas info
+            if (politicaSugerida == null) {
                 agregarMensaje(conv, "agente", mensajeCliente != null ? mensajeCliente
                         : "No entendi bien tu solicitud. Puedes decirme que tramite necesitas?", "texto");
                 return Map.of("mensajeAgente", mensajeCliente != null ? mensajeCliente
                         : "No entendi bien tu solicitud.", "estado", conv.getEstado().name());
             }
+
+            // Si hay politica sugerida pero necesita_mas_info=true, igual guardamos la candidata
+            // y pasamos a CONFIRMANDO_POLITICA para que el proximo "si" funcione correctamente
 
             // Politica detectada — pasar a confirmacion
             String politicaId = (String) politicaSugerida.get("id");
@@ -171,20 +235,44 @@ public class AgenteService {
 
     private Map<String, Object> manejarConfirmacion(ConversacionAgente conv, String mensaje) {
         String textoLower = mensaje.toLowerCase().trim();
-        boolean confirmo = textoLower.contains("si") || textoLower.contains("yes")
+
+        // Palabras afirmativas en espanol boliviano
+        boolean confirmo = textoLower.equals("si") || textoLower.equals("sí")
+                || textoLower.startsWith("si,") || textoLower.startsWith("sí,")
                 || textoLower.contains("correcto") || textoLower.contains("exacto")
-                || textoLower.contains("claro") || textoLower.contains("ok");
-        boolean rechazo = textoLower.contains("no") || textoLower.contains("otro")
-                || textoLower.contains("diferente") || textoLower.contains("error");
+                || textoLower.contains("claro") || textoLower.contains("ok")
+                || textoLower.contains("yes") || textoLower.contains("dale")
+                || textoLower.contains("eso es") || textoLower.contains("eso quiero")
+                || textoLower.contains("eso mismo") || textoLower.contains("afirmativo")
+                || textoLower.contains("asi es") || textoLower.contains("bueno")
+                || textoLower.contains("perfecto") || textoLower.contains("confirmo")
+                || (textoLower.contains("si") && textoLower.length() <= 15);
+
+        // Palabras negativas
+        boolean rechazo = textoLower.equals("no") || textoLower.startsWith("no,")
+                || textoLower.contains("no es") || textoLower.contains("otro")
+                || textoLower.contains("diferente") || textoLower.contains("error")
+                || textoLower.contains("equivocado") || textoLower.contains("incorrecto")
+                || textoLower.contains("otro tramite") || textoLower.contains("no quiero");
+
+        // Si confirmo pero NO rechazo (evitar "no si" que triggerea ambos)
+        if (rechazo) confirmo = false;
 
         Map<String, Object> datos = conv.getDatosRecopilados() != null
                 ? new HashMap<>(conv.getDatosRecopilados()) : new HashMap<>();
 
         if (confirmo) {
             String politicaId = (String) datos.get("politicaIdPropuesta");
-            if (politicaId == null) {
+            if (politicaId == null || politicaId.isBlank()) {
+                // No hay politica candidata — volver a detectar con lista amigable
                 conv.setEstado(EstadoConversacion.DETECTANDO_POLITICA);
-                String msg = "Ocurrio un error. Por favor cuentame de nuevo que tramite necesitas.";
+                List<Politica> politicasDisp = politicaRepository.findAll().stream()
+                        .filter(p -> Boolean.TRUE.equals(p.getActivo()) && "ACTIVA".equals(p.getEstado()))
+                        .collect(Collectors.toList());
+                String lista = politicasDisp.stream()
+                        .map(p -> "- " + p.getNombre())
+                        .collect(Collectors.joining("\n"));
+                String msg = "Cual de estos tramites necesitas?\n" + lista;
                 agregarMensaje(conv, "agente", msg, "texto");
                 return Map.of("mensajeAgente", msg, "estado", "DETECTANDO_POLITICA");
             }
@@ -201,7 +289,7 @@ public class AgenteService {
             return Map.of("mensajeAgente", msg, "estado", "DETECTANDO_POLITICA");
         } else {
             String politicaNombre = (String) datos.getOrDefault("politicaNombrePropuesta", "el tramite");
-            String msg = "Por favor confirma: quieres iniciar " + politicaNombre + "? Responde si o no.";
+            String msg = "Por favor confirma: quieres iniciar \"" + politicaNombre + "\"? Responde si o no.";
             agregarMensaje(conv, "agente", msg, "confirmacion");
             return Map.of("mensajeAgente", msg, "estado", "CONFIRMANDO_POLITICA");
         }
