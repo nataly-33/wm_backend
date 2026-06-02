@@ -4,9 +4,11 @@ import com.workflow.agente.service.AgenteService;
 import com.workflow.departamento.model.Departamento;
 import com.workflow.departamento.repository.DepartamentoRepository;
 import com.workflow.ejecucion.model.EjecucionNodo;
+import com.workflow.ejecucion.model.FaseNodo;
 import com.workflow.ejecucion.repository.EjecucionNodoRepository;
 import com.workflow.formulario.model.Formulario;
 import com.workflow.formulario.model.Formulario.CampoFormulario;
+import com.workflow.formulario.model.LlenadoPor;
 import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
@@ -529,6 +531,167 @@ public class MotorWorkflowService {
                 Map.of("tipo", "COMPLETADO", "tramiteId", tramite.getId())
             )
         );
+    }
+
+    // ─── Lógica de dos fases ──────────────────────────────────────────────────
+
+    /**
+     * Crea la EjecucionNodo inicial para un nodo. Si el nodo tiene campos CLIENTE,
+     * la fase comienza en ESPERANDO_CLIENTE; si no, salta directo a ESPERANDO_FUNCIONARIO
+     * y notifica al funcionario de inmediato.
+     */
+    private EjecucionNodo crearEjecucionNodoFaseCliente(Tramite tramite, Nodo nodo) {
+        Formulario form = formularioRepository.findByNodoId(nodo.getId()).orElse(null);
+        boolean tieneFieldsCliente = form != null && form.getCampos() != null
+                && form.getCampos().stream().anyMatch(c -> c.getLlenadoPor() == LlenadoPor.CLIENTE);
+
+        FaseNodo faseInicial = tieneFieldsCliente
+                ? FaseNodo.ESPERANDO_CLIENTE
+                : FaseNodo.ESPERANDO_FUNCIONARIO;
+
+        AsignacionUsuario asignacion = buscarFuncionarioAsignado(tramite.getEmpresaId(), nodo.getDepartamentoId());
+
+        EjecucionNodo ejecucion = EjecucionNodo.builder()
+                .tramiteId(tramite.getId())
+                .nodoId(nodo.getId())
+                .politicaId(tramite.getPoliticaId())
+                .clienteId(tramite.getClienteId())
+                .departamentoId(nodo.getDepartamentoId())
+                .fase(faseInicial)
+                .respuestasCliente(new HashMap<>())
+                .respuestasFuncionario(new HashMap<>())
+                .estado(faseInicial == FaseNodo.ESPERANDO_FUNCIONARIO ? asignacion.estado() : "ESPERANDO_CLIENTE")
+                .creadoEn(LocalDateTime.now())
+                .archivosAdjuntos(new ArrayList<>())
+                .build();
+
+        if (faseInicial == FaseNodo.ESPERANDO_FUNCIONARIO) {
+            ejecucion.setFuncionarioId(asignacion.funcionarioId());
+        }
+
+        EjecucionNodo guardada = ejecucionNodoRepository.save(ejecucion);
+
+        if (faseInicial == FaseNodo.ESPERANDO_FUNCIONARIO) {
+            tramite.setNodoActualId(nodo.getId());
+            tramiteRepository.save(tramite);
+            notificarAsignacionFuncionario(tramite, guardada, nodo);
+        }
+
+        return guardada;
+    }
+
+    /**
+     * Llamado desde AgenteService cuando el cliente terminó de rellenar
+     * todos los campos CLIENTE del formulario del nodo actual.
+     */
+    public void clienteCompletadoNodo(String tramiteId, String nodoId,
+                                      Map<String, Object> respuestasCliente) {
+        EjecucionNodo ejecucion = ejecucionNodoRepository
+                .findByTramiteIdAndNodoIdAndFase(tramiteId, nodoId, FaseNodo.ESPERANDO_CLIENTE)
+                .orElseThrow(() -> new RuntimeException(
+                        "No hay ejecución en fase CLIENTE para nodo: " + nodoId));
+
+        ejecucion.setRespuestasCliente(respuestasCliente);
+        ejecucion.setClienteCompletadoEn(LocalDateTime.now());
+        ejecucion.setFase(FaseNodo.ESPERANDO_FUNCIONARIO);
+
+        Tramite tramite = tramiteRepository.findById(tramiteId).orElseThrow();
+        AsignacionUsuario asignacion = buscarFuncionarioAsignado(tramite.getEmpresaId(), ejecucion.getDepartamentoId());
+        ejecucion.setFuncionarioId(asignacion.funcionarioId());
+        ejecucion.setEstado(asignacion.estado());
+        ejecucionNodoRepository.save(ejecucion);
+
+        tramite.setNodoActualId(nodoId);
+        tramiteRepository.save(tramite);
+
+        Nodo nodo = nodoRepository.findById(nodoId).orElseThrow();
+        notificarAsignacionFuncionario(tramite, ejecucion, nodo);
+    }
+
+    /**
+     * El funcionario aprueba o rechaza el nodo.
+     * Solo se puede llamar cuando la fase es ESPERANDO_FUNCIONARIO.
+     */
+    public void funcionarioCompletadoNodo(String ejecucionId,
+                                          Map<String, Object> respuestasFuncionario,
+                                          String funcionarioId) {
+        EjecucionNodo ejecucion = ejecucionNodoRepository.findById(ejecucionId)
+                .orElseThrow(() -> new RuntimeException("Ejecución no encontrada"));
+
+        if (ejecucion.getFase() != FaseNodo.ESPERANDO_FUNCIONARIO) {
+            throw new IllegalStateException(
+                    "El nodo no está en fase de revisión del funcionario. Fase actual: " + ejecucion.getFase());
+        }
+
+        ejecucion.setRespuestasFuncionario(respuestasFuncionario);
+        ejecucion.setFuncionarioId(funcionarioId);
+        ejecucion.setFuncionarioCompletadoEn(LocalDateTime.now());
+
+        String decision = extraerDecisionDeRespuestas(respuestasFuncionario, ejecucion.getNodoId());
+
+        if ("Rechazado".equalsIgnoreCase(decision) || "No Viable".equalsIgnoreCase(decision)
+                || "Inválida".equalsIgnoreCase(decision)) {
+            ejecucion.setFase(FaseNodo.RECHAZADA);
+            ejecucion.setEstado("RECHAZADO");
+            ejecucion.setCompletadoEn(LocalDateTime.now());
+            ejecucionNodoRepository.save(ejecucion);
+
+            Tramite tramite = tramiteRepository.findById(ejecucion.getTramiteId()).orElseThrow();
+            tramite.setEstadoGeneral("RECHAZADO");
+            tramite.setFinalizadoEn(LocalDateTime.now());
+            tramiteRepository.save(tramite);
+
+            try {
+                agenteService.notificarClienteDecision(ejecucion.getTramiteId(), "RECHAZADO", null);
+            } catch (Exception e) {
+                log.warn("No se pudo notificar al cliente del rechazo: {}", e.getMessage());
+            }
+
+            Map<String, Object> eventoRechazo = new HashMap<>();
+            eventoRechazo.put("tipo", "NODO_COMPLETADO");
+            eventoRechazo.put("nodoId", ejecucion.getNodoId());
+            eventoRechazo.put("siguienteNodoId", null);
+            eventoRechazo.put("decision", "RECHAZADO");
+            notificacionService.notificarCambioMonitor(tramite.getPoliticaId(), eventoRechazo);
+            return;
+        }
+
+        ejecucion.setFase(FaseNodo.COMPLETADA);
+        ejecucion.setEstado("COMPLETADO");
+        ejecucion.setCompletadoEn(LocalDateTime.now());
+        ejecucionNodoRepository.save(ejecucion);
+
+        Tramite tramite = tramiteRepository.findById(ejecucion.getTramiteId()).orElseThrow();
+
+        // Usar el motor existente para determinar el siguiente nodo
+        avanzarTramite(tramite, ejecucion);
+    }
+
+    /**
+     * Extrae el valor de decisión desde las respuestas del funcionario consultando
+     * el campo marcado como esCampoPrioridad en el formulario del nodo.
+     */
+    private String extraerDecisionDeRespuestas(Map<String, Object> respuestas, String nodoId) {
+        if (respuestas == null) return "";
+
+        Formulario formulario = formularioRepository.findByNodoIdAndActivoTrue(nodoId).orElse(null);
+        if (formulario != null && formulario.getCampos() != null) {
+            for (CampoFormulario campo : formulario.getCampos()) {
+                if (Boolean.TRUE.equals(campo.getEsCampoPrioridad())) {
+                    Object valor = respuestas.get(campo.getNombre());
+                    if (valor != null) return String.valueOf(valor);
+                }
+            }
+        }
+
+        Object decision = respuestas.get("decision");
+        if (decision != null) return String.valueOf(decision);
+
+        return respuestas.values().stream()
+                .filter(Objects::nonNull)
+                .findFirst()
+                .map(String::valueOf)
+                .orElse("");
     }
 
     private record AsignacionUsuario(String funcionarioId, String estado) {
