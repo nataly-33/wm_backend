@@ -9,5 +9,13 @@ import java.util.Optional;
 
 public interface ConversacionAgenteRepository extends MongoRepository<ConversacionAgente, String> {
     List<ConversacionAgente> findByClienteId(String clienteId);
-    Optional<ConversacionAgente> findByClienteIdAndEstadoNot(String clienteId, EstadoConversacion estado);
+
+    Optional<ConversacionAgente> findFirstByClienteIdAndEstadoNotOrderByUltimaActividadEnDesc(
+            String clienteId, EstadoConversacion estado);
+
+    List<ConversacionAgente> findByClienteIdAndEstadoNot(String clienteId, EstadoConversacion estado);
+
+    void deleteByClienteIdAndEstadoNot(String clienteId, EstadoConversacion estado);
+
+    Optional<ConversacionAgente> findByTramiteId(String tramiteId);
 }
