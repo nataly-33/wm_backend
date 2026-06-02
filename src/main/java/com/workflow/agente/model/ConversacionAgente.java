@@ -29,4 +29,6 @@ public class ConversacionAgente {
     private List<String> archivosSubidos;
     private LocalDateTime creadoEn;
     private LocalDateTime ultimaActividadEn;
+    private String empresaId;
+    private String nombreTramitePropuesto;
 }

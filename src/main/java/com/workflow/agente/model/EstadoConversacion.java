@@ -3,6 +3,7 @@ package com.workflow.agente.model;
 public enum EstadoConversacion {
     DETECTANDO_POLITICA,
     CONFIRMANDO_POLITICA,
+    CONFIRMACION_FINAL,
     RECOPILANDO_DATOS_NODO,
     ESPERANDO_ARCHIVOS,
     ESPERANDO_APROBACION,
