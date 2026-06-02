@@ -1,5 +1,6 @@
 package com.workflow.formulario.dto;
 
+import com.workflow.formulario.model.LlenadoPor;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,4 +19,6 @@ public class FormularioCampoRequest {
     private List<String> opciones;
     private Integer filas;
     private List<String> columnas;
+    private LlenadoPor llenadoPor;
+    private Boolean requeridoParaAvanzar;
 }

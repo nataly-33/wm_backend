@@ -1,6 +1,7 @@
 package com.workflow.formulario.dto;
 
 import com.workflow.formulario.model.Formulario;
+import com.workflow.formulario.model.LlenadoPor;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -19,6 +20,8 @@ public class FormularioCampoResponse {
     private List<String> opciones;
     private Integer filas;
     private List<String> columnas;
+    private LlenadoPor llenadoPor;
+    private Boolean requeridoParaAvanzar;
 
     public static FormularioCampoResponse fromEntity(Formulario.CampoFormulario campo) {
         FormularioCampoResponse r = new FormularioCampoResponse();
@@ -30,6 +33,8 @@ public class FormularioCampoResponse {
         r.setOpciones(campo.getOpciones());
         r.setFilas(campo.getFilas());
         r.setColumnas(campo.getColumnas());
+        r.setLlenadoPor(campo.getLlenadoPor());
+        r.setRequeridoParaAvanzar(campo.getRequeridoParaAvanzar());
         return r;
     }
 }

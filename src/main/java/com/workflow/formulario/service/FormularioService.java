@@ -82,6 +82,8 @@ public class FormularioService {
                 .opciones(campo.getOpciones())
                 .filas(campo.getFilas())
                 .columnas(campo.getColumnas())
+                .llenadoPor(campo.getLlenadoPor())
+                .requeridoParaAvanzar(campo.getRequeridoParaAvanzar())
                 .build()).toList();
     }
 

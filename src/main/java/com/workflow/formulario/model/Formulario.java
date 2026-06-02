@@ -51,5 +51,9 @@ public class Formulario {
         private Integer filas;
         /** Nombres de columnas (solo GRID) */
         private List<String> columnas;
+        /** Quién rellena este campo: CLIENTE o FUNCIONARIO. Si null, tratar como FUNCIONARIO. */
+        private LlenadoPor llenadoPor;
+        /** Si es FUNCIONARIO y true, el motor de workflow espera que lo llene antes de avanzar */
+        private Boolean requeridoParaAvanzar;
     }
 }
