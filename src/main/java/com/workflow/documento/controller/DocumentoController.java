@@ -108,4 +108,34 @@ public class DocumentoController {
             s3Service.listarArchivosTramite(empresaId, clienteId, tramiteId)
         );
     }
+
+    /**
+     * Genera una URL pre-firmada de S3 válida por 60 minutos a partir de una s3Key.
+     * Usar este endpoint para visualizar o descargar archivos en lugar de acceder
+     * directamente a la URL pública (que puede ser inaccesible si el bucket es privado).
+     *
+     * GET /api/v1/documentos/presignado?key=empresaId/clienteId/tramiteId/depto/timestamp_archivo
+     */
+    @GetMapping("/api/v1/documentos/presignado")
+    public ResponseEntity<Map<String, String>> urlPresignada(
+            @RequestParam String key,
+            @RequestParam(defaultValue = "60") int minutos) {
+        String url = s3Service.generarUrlPresignada(key, minutos);
+        return ResponseEntity.ok(Map.of("url", url, "key", key, "expiraEnMinutos", String.valueOf(minutos)));
+    }
+
+    /**
+     * Genera URL presignada a partir de la URL pública almacenada en MongoDB.
+     * Útil cuando sólo se tiene la urlArchivo del DocumentoResponse.
+     *
+     * GET /api/v1/documentos/presignado-por-url?url=https://bucket.s3.amazonaws.com/...
+     */
+    @GetMapping("/api/v1/documentos/presignado-por-url")
+    public ResponseEntity<Map<String, String>> urlPresignadaPorUrl(
+            @RequestParam String url,
+            @RequestParam(defaultValue = "60") int minutos) {
+        String key = s3Service.extraerKeyDeUrl(url);
+        String urlFirmada = s3Service.generarUrlPresignada(key, minutos);
+        return ResponseEntity.ok(Map.of("url", urlFirmada, "key", key, "expiraEnMinutos", String.valueOf(minutos)));
+    }
 }
