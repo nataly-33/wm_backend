@@ -159,6 +159,12 @@ public class UsuarioService {
                 .collect(Collectors.toList());
     }
 
+    public List<UsuarioResponse> listarPorRol(String empresaId, String rol) {
+        return usuarioRepository.findByEmpresaIdAndRolAndActivoTrue(empresaId, rol).stream()
+                .map(UsuarioResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
     private void validarRol(String rol) {
         if (rol == null || !ROLES_VALIDOS.contains(rol)) {
             throw new RuntimeException("Rol invalido. Debe ser ADMIN_GENERAL, ADMIN_DEPARTAMENTO o FUNCIONARIO");

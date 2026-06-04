@@ -33,8 +33,11 @@ public class UsuarioController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UsuarioResponse>>> listarUsuarios(
-            @RequestAttribute("X-Empresa-Id") String empresaId) {
-        List<UsuarioResponse> response = usuarioService.listarUsuarios(empresaId);
+            @RequestAttribute("X-Empresa-Id") String empresaId,
+            @RequestParam(required = false) String rol) {
+        List<UsuarioResponse> response = rol != null && !rol.isBlank()
+                ? usuarioService.listarPorRol(empresaId, rol)
+                : usuarioService.listarUsuarios(empresaId);
         return ResponseEntity.ok(ApiResponse.success("Usuarios obtenidos", response));
     }
 
