@@ -106,19 +106,30 @@ public class DataSeeder {
         crearUsuario(empresa.getId(), "Laura Gutierrez", "admin2@cre.bo", "Admin123!", "ADMIN_GENERAL", null, null);
 
         // --- Admins por departamento ---
-        Usuario uAdminAtencion = crearUsuario(empresa.getId(), "María Fernández", "admin.atencion@cre.bo", "Admin123!", "ADMIN_DEPARTAMENTO", dAtencion.getId(), null);
-        Usuario uAdminTecnico  = crearUsuario(empresa.getId(), "Luis Pedraza",    "admin.tecnico@cre.bo",  "Admin123!", "ADMIN_DEPARTAMENTO", dTecnico.getId(),  null);
+        Usuario uAdminAtencion = crearUsuario(empresa.getId(), "María Fernández",  "admin.atencion@cre.bo",     "Admin123!", "ADMIN_DEPARTAMENTO", dAtencion.getId(), null);
+        Usuario uAdminTecnico  = crearUsuario(empresa.getId(), "Luis Pedraza",     "admin.tecnico@cre.bo",      "Admin123!", "ADMIN_DEPARTAMENTO", dTecnico.getId(),  null);
+        Usuario uAdminFact     = crearUsuario(empresa.getId(), "Patricia Salinas", "admin.facturacion@cre.bo",  "Admin123!", "ADMIN_DEPARTAMENTO", dFact.getId(),     null);
+        Usuario uAdminLegal    = crearUsuario(empresa.getId(), "Fernando Quispe",  "admin.legal@cre.bo",        "Admin123!", "ADMIN_DEPARTAMENTO", dLegal.getId(),    null);
+        Usuario uAdminRrhh     = crearUsuario(empresa.getId(), "Valeria Montaño",  "admin.rrhh@cre.bo",         "Admin123!", "ADMIN_DEPARTAMENTO", dRrhh.getId(),     null);
 
         dAtencion.setAdminDepartamentoId(uAdminAtencion.getId());
         departamentoRepository.save(dAtencion);
         dTecnico.setAdminDepartamentoId(uAdminTecnico.getId());
         departamentoRepository.save(dTecnico);
-        // dFact, dLegal, dRrhh sin admin asignado inicialmente
+        dFact.setAdminDepartamentoId(uAdminFact.getId());
+        departamentoRepository.save(dFact);
+        dLegal.setAdminDepartamentoId(uAdminLegal.getId());
+        departamentoRepository.save(dLegal);
+        dRrhh.setAdminDepartamentoId(uAdminRrhh.getId());
+        departamentoRepository.save(dRrhh);
 
         // --- Funcionarios ---
-        crearUsuario(empresa.getId(), "Carlos Vaca",    "func1.atencion@cre.bo", "Func123!", "FUNCIONARIO", dAtencion.getId(), null);
-        crearUsuario(empresa.getId(), "Ana Romero",     "func2.atencion@cre.bo", "Func123!", "FUNCIONARIO", dAtencion.getId(), null);
-        crearUsuario(empresa.getId(), "Roberto Suárez", "func1.tecnico@cre.bo",  "Func123!", "FUNCIONARIO", dTecnico.getId(),  null);
+        crearUsuario(empresa.getId(), "Carlos Vaca",      "func1.atencion@cre.bo",     "Func123!", "FUNCIONARIO", dAtencion.getId(), null);
+        crearUsuario(empresa.getId(), "Ana Romero",       "func2.atencion@cre.bo",     "Func123!", "FUNCIONARIO", dAtencion.getId(), null);
+        crearUsuario(empresa.getId(), "Roberto Suárez",   "func1.tecnico@cre.bo",      "Func123!", "FUNCIONARIO", dTecnico.getId(),  null);
+        crearUsuario(empresa.getId(), "Gabriela Flores",  "func1.facturacion@cre.bo",  "Func123!", "FUNCIONARIO", dFact.getId(),     null);
+        crearUsuario(empresa.getId(), "Ramiro Condori",   "func1.legal@cre.bo",        "Func123!", "FUNCIONARIO", dLegal.getId(),    null);
+        crearUsuario(empresa.getId(), "Diego Vargas",     "func1.rrhh@cre.bo",         "Func123!", "FUNCIONARIO", dRrhh.getId(),     null);
 
         // --- Clientes ---
         crearUsuario(empresa.getId(), "Kevin Torres", "cliente1@cre.bo", "Cliente123!", "CLIENTE", null, null);
@@ -141,12 +152,18 @@ public class DataSeeder {
         log.info("    admin@cre.bo  / Admin123!");
         log.info("    admin2@cre.bo / Admin123!");
         log.info("  ADMIN DEPARTAMENTO:");
-        log.info("    admin.atencion@cre.bo / Admin123!");
-        log.info("    admin.tecnico@cre.bo  / Admin123!");
+        log.info("    admin.atencion@cre.bo    / Admin123!");
+        log.info("    admin.tecnico@cre.bo     / Admin123!");
+        log.info("    admin.facturacion@cre.bo / Admin123!");
+        log.info("    admin.legal@cre.bo       / Admin123!");
+        log.info("    admin.rrhh@cre.bo        / Admin123!");
         log.info("  FUNCIONARIO:");
-        log.info("    func1.atencion@cre.bo / Func123!");
-        log.info("    func2.atencion@cre.bo / Func123!");
-        log.info("    func1.tecnico@cre.bo  / Func123!");
+        log.info("    func1.atencion@cre.bo    / Func123!");
+        log.info("    func2.atencion@cre.bo    / Func123!");
+        log.info("    func1.tecnico@cre.bo     / Func123!");
+        log.info("    func1.facturacion@cre.bo / Func123!");
+        log.info("    func1.legal@cre.bo       / Func123!");
+        log.info("    func1.rrhh@cre.bo        / Func123!");
         log.info("  CLIENTE:");
         log.info("    cliente1@cre.bo / Cliente123!");
         log.info("    cliente2@cre.bo / Cliente123!");
@@ -173,14 +190,14 @@ public class DataSeeder {
 
         Nodo inicio     = crearNodo(pol.getId(), null,       "INICIO", "Inicio",                          100,  200);
         Nodo nodo1      = crearNodo(pol.getId(), at.getId(), "TAREA",  "Recepción de Solicitud",          300,  200);
-        Nodo nodo2      = crearNodo(pol.getId(), at.getId(), "TAREA",  "Verificación de Documentación",   500,  200);
         Nodo nodo3      = crearNodo(pol.getId(), te.getId(), "TAREA",  "Inspección Técnica",              700,  200);
         Nodo nodo4      = crearNodo(pol.getId(), fa.getId(), "TAREA",  "Registro de Pago",                900,  200);
         Nodo nodo5      = crearNodo(pol.getId(), le.getId(), "TAREA",  "Firma de Contrato",               1100, 200);
         Nodo fin        = crearNodo(pol.getId(), null,       "FIN",    "Fin",                             1300, 200);
-        Nodo finRechazo = crearNodo(pol.getId(), null,       "FIN",    "Fin — Solicitud Rechazada",       500,  400);
+        Nodo finRechazo = crearNodo(pol.getId(), null,       "FIN",    "Fin — Solicitud Rechazada",       300,  400);
 
-        // Nodo 1: El CLIENTE rellena todo; el FUNCIONARIO confirma recepción
+        // Nodo 1: El CLIENTE rellena todo; el FUNCIONARIO decide si la documentación es válida
+        resetCampoOrden();
         Formulario fNodo1 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo1.getId())
                 .nombre("Solicitud de instalación de medidor")
@@ -196,30 +213,16 @@ public class DataSeeder {
                         campo("cedula_pdf",         "Cédula de identidad (PDF o imagen)",            "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
                         campo("servicios_actuales", "Servicios que ya tiene en el domicilio",        "CHECKBOX",    false, false, LlenadoPor.CLIENTE,
                                 List.of("Agua", "Gas", "Internet", "Teléfono", "Ninguno")),
-                        campo("recepcion_ok",       "Solicitud recibida y registrada",               "SELECTOR",    true,  true,  LlenadoPor.FUNCIONARIO,
+                        campo("observaciones",      "Observaciones sobre la documentación",          "AREA_TEXTO",  false, false, LlenadoPor.FUNCIONARIO, null),
+                        campo("resultado",          "Resultado de la revisión de la solicitud",      "SELECTOR",    true,  true,  LlenadoPor.FUNCIONARIO,
                                 List.of("Aprobado", "Rechazado"))
                 ))
                 .build());
         nodo1.setFormularioId(fNodo1.getId());
         nodoRepository.save(nodo1);
 
-        // Nodo 2: FUNCIONARIO decide si la documentación es válida
-        Formulario fNodo2 = formularioRepository.save(Formulario.builder()
-                .politicaId(pol.getId()).nodoId(nodo2.getId())
-                .nombre("Verificación de documentación")
-                .activo(true)
-                .campos(List.of(
-                        campo("info_revision",       "Revisar cédula, dirección y tipo de instalación antes de continuar.",
-                                "ETIQUETA",    false, false, LlenadoPor.FUNCIONARIO, null),
-                        campo("resultado",           "Resultado de la verificación",                 "SELECTOR",    true,  true,  LlenadoPor.FUNCIONARIO,
-                                List.of("Aprobado", "Rechazado")),
-                        campo("observaciones",       "Observaciones",                               "AREA_TEXTO",  false, false, LlenadoPor.FUNCIONARIO, null)
-                ))
-                .build());
-        nodo2.setFormularioId(fNodo2.getId());
-        nodoRepository.save(nodo2);
-
         // Nodo 3: CLIENTE confirma visita + FUNCIONARIO documenta inspección
+        resetCampoOrden();
         Formulario fNodo3 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo3.getId())
                 .nombre("Inspección técnica")
@@ -231,7 +234,8 @@ public class DataSeeder {
                         campo("resultado_inspeccion", "Resultado de la inspección técnica",              "SELECTOR",  true,  true,  LlenadoPor.FUNCIONARIO,
                                 List.of("Viable", "No Viable")),
                         campo("costo_estimado",       "Costo estimado de instalación (Bs.)",            "NUMERO",    true,  false, LlenadoPor.FUNCIONARIO, null),
-                        campo("materiales_tabla",     "Planilla de materiales requeridos",              "TABLA_GRID", true, false, LlenadoPor.FUNCIONARIO, null),
+                        campoGrid("materiales_tabla", "Planilla de materiales requeridos", true, LlenadoPor.FUNCIONARIO,
+                                List.of("Material", "Unidad", "Cantidad", "Costo unitario (Bs.)")),
                         campo("informe_tecnico",      "Informe técnico (Word o PDF)",                   "ARCHIVO",   true,  false, LlenadoPor.FUNCIONARIO, null),
                         campo("foto_punto_conexion",  "Foto del punto de conexión inspeccionado",       "IMAGEN",    true,  false, LlenadoPor.FUNCIONARIO, null)
                 ))
@@ -240,6 +244,7 @@ public class DataSeeder {
         nodoRepository.save(nodo3);
 
         // Nodo 4: CLIENTE sube comprobante; FUNCIONARIO verifica pago
+        resetCampoOrden();
         Formulario fNodo4 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo4.getId())
                 .nombre("Registro de pago")
@@ -256,6 +261,7 @@ public class DataSeeder {
         nodoRepository.save(nodo4);
 
         // Nodo 5: FUNCIONARIO elabora y registra contrato
+        resetCampoOrden();
         Formulario fNodo5 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo5.getId())
                 .nombre("Firma de contrato")
@@ -273,15 +279,14 @@ public class DataSeeder {
 
         // Transiciones
         crearTransicion(pol.getId(), inicio.getId(),    nodo1.getId(),      "LINEAL",      null,          null);
-        crearTransicion(pol.getId(), nodo1.getId(),     nodo2.getId(),      "LINEAL",      null,          null);
-        crearTransicion(pol.getId(), nodo2.getId(),     nodo3.getId(),      "ALTERNATIVA", "Aprobado",    null);
-        crearTransicion(pol.getId(), nodo2.getId(),     finRechazo.getId(), "ALTERNATIVA", "Rechazado",   null);
+        crearTransicion(pol.getId(), nodo1.getId(),     nodo3.getId(),      "ALTERNATIVA", "Aprobado",    null);
+        crearTransicion(pol.getId(), nodo1.getId(),     finRechazo.getId(), "ALTERNATIVA", "Rechazado",   null);
         crearTransicion(pol.getId(), nodo3.getId(),     nodo4.getId(),      "LINEAL",      null,          null);
         crearTransicion(pol.getId(), nodo4.getId(),     nodo5.getId(),      "LINEAL",      null,          null);
         crearTransicion(pol.getId(), nodo5.getId(),     fin.getId(),        "LINEAL",      null,          null);
 
         aplicarLayoutSeeder(
-                List.of(inicio, nodo1, nodo2, nodo3, nodo4, nodo5, fin, finRechazo),
+                List.of(inicio, nodo1, nodo3, nodo4, nodo5, fin, finRechazo),
                 transicionRepository.findByPoliticaIdAndActivoTrue(pol.getId()),
                 List.of(at, te, fa, le)
         );
@@ -318,6 +323,7 @@ public class DataSeeder {
         Nodo finRechazo = crearNodo(pol.getId(), null,       "FIN",      "Fin — Reconexión Denegada",           700, 800);
 
         // Nodo 1: CLIENTE da información; FUNCIONARIO valida la solicitud
+        resetCampoOrden();
         Formulario fNodo1 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo1.getId())
                 .nombre("Solicitud de reconexión de servicio")
@@ -340,6 +346,7 @@ public class DataSeeder {
         nodoRepository.save(nodo1);
 
         // Nodo 2: FUNCIONARIO Facturación verifica deuda
+        resetCampoOrden();
         Formulario fNodo2 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo2.getId())
                 .nombre("Verificación de deuda")
@@ -355,6 +362,7 @@ public class DataSeeder {
         nodoRepository.save(nodo2);
 
         // Nodo 3: FUNCIONARIO Técnico verifica instalación
+        resetCampoOrden();
         Formulario fNodo3 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo3.getId())
                 .nombre("Verificación técnica de instalación")
@@ -370,6 +378,7 @@ public class DataSeeder {
         nodoRepository.save(nodo3);
 
         // Nodo 4: CLIENTE confirma disponibilidad; FUNCIONARIO ejecuta y registra
+        resetCampoOrden();
         Formulario fNodo4 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo4.getId())
                 .nombre("Ejecución de reconexión")
@@ -435,6 +444,7 @@ public class DataSeeder {
         Nodo finSupervisor = crearNodo(pol.getId(), null,    "FIN",    "Fin — Resuelto por Supervisor",     900, 600);
 
         // Nodo 1: CLIENTE registra el reclamo; FUNCIONARIO lo acepta o rechaza
+        resetCampoOrden();
         Formulario fNodo1 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo1.getId())
                 .nombre("Registro del reclamo de facturación")
@@ -459,6 +469,7 @@ public class DataSeeder {
         nodoRepository.save(nodo1);
 
         // Nodo 2: FUNCIONARIO Facturación analiza consumo
+        resetCampoOrden();
         Formulario fNodo2 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo2.getId())
                 .nombre("Análisis de consumo histórico")
@@ -468,7 +479,8 @@ public class DataSeeder {
                         campo("consumo_real",       "Consumo real del mes reclamado (kWh)",             "NUMERO",      true,  false, LlenadoPor.FUNCIONARIO, null),
                         campo("consumo_promedio",   "Consumo promedio últimos 6 meses (kWh)",           "NUMERO",      true,  false, LlenadoPor.FUNCIONARIO, null),
                         campo("diferencia_pct",     "Diferencia porcentual respecto al promedio (%)",   "NUMERO",      true,  false, LlenadoPor.FUNCIONARIO, null),
-                        campo("tabla_comparativa",  "Tabla comparativa de consumos",                    "TABLA_GRID",  true,  false, LlenadoPor.FUNCIONARIO, null),
+                        campoGrid("tabla_comparativa", "Tabla comparativa de consumos", true, LlenadoPor.FUNCIONARIO,
+                                List.of("Mes", "Consumo (kWh)", "Monto facturado (Bs.)", "Diferencia (%)")),
                         campo("conclusion",         "¿Se confirma el error de facturación?",            "SELECTOR",    true,  true,  LlenadoPor.FUNCIONARIO,
                                 List.of("Sí — error confirmado", "No — facturación correcta"))
                 ))
@@ -477,6 +489,7 @@ public class DataSeeder {
         nodoRepository.save(nodo2);
 
         // Nodo 3: FUNCIONARIO emite nota de crédito
+        resetCampoOrden();
         Formulario fNodo3 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo3.getId())
                 .nombre("Nota de crédito")
@@ -493,6 +506,7 @@ public class DataSeeder {
         nodoRepository.save(nodo3);
 
         // Nodo 4: FUNCIONARIO Atención explica; socio decide
+        resetCampoOrden();
         Formulario fNodo4 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo4.getId())
                 .nombre("Explicación al socio")
@@ -507,6 +521,7 @@ public class DataSeeder {
         nodoRepository.save(nodo4);
 
         // Nodo 5: FUNCIONARIO RRHH escala a supervisor
+        resetCampoOrden();
         Formulario fNodo5 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo5.getId())
                 .nombre("Escalado a supervisor")
@@ -560,59 +575,38 @@ public class DataSeeder {
 
         Nodo inicio     = crearNodo(pol.getId(), null,       "INICIO", "Inicio",                               100,  200);
         Nodo nodo1      = crearNodo(pol.getId(), at.getId(), "TAREA",  "Presentación de Solicitud",            300,  200);
-        Nodo nodo2      = crearNodo(pol.getId(), at.getId(), "TAREA",  "Verificación Documental",              500,  200);
         Nodo nodo3      = crearNodo(pol.getId(), le.getId(), "TAREA",  "Elaboración del Nuevo Contrato",       700,  200);
         Nodo nodo4      = crearNodo(pol.getId(), fa.getId(), "TAREA",  "Actualización de Datos de Facturación",900,  200);
         Nodo fin        = crearNodo(pol.getId(), null,       "FIN",    "Fin — Titularidad Transferida",        1100, 200);
-        Nodo finRechazo = crearNodo(pol.getId(), null,       "FIN",    "Fin — Documentación Insuficiente",     500,  400);
+        Nodo finRechazo = crearNodo(pol.getId(), null,       "FIN",    "Fin — Documentación Insuficiente",     300,  400);
 
-        // Nodo 1: CLIENTE sube todos los documentos; FUNCIONARIO confirma recepción
+        // Nodo 1: CLIENTE sube todos los documentos; FUNCIONARIO decide si la documentación es válida
+        resetCampoOrden();
         Formulario fNodo1 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo1.getId())
                 .nombre("Solicitud de cambio de titularidad")
                 .activo(true)
                 .campos(List.of(
-                        campo("nombre_cedente",    "Nombre completo del titular actual (cedente)",        "TEXTO_CORTO", true,  false, LlenadoPor.CLIENTE,     null),
-                        campo("ci_cedente",        "Cédula del titular actual (imagen o PDF)",            "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
-                        campo("nombre_cesionario", "Nombre completo del nuevo titular (cesionario)",      "TEXTO_CORTO", true,  false, LlenadoPor.CLIENTE,     null),
-                        campo("ci_cesionario",     "Cédula del nuevo titular (imagen o PDF)",             "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
-                        campo("poder_notarial",    "Poder notarial o declaración de transferencia (PDF)", "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
-                        campo("planilla_datos",    "Planilla de datos del nuevo titular (Excel)",         "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
-                        campo("numero_medidor",    "Número del medidor a transferir",                     "NUMERO",      true,  false, LlenadoPor.CLIENTE,     null),
-                        campo("foto_medidor",      "Foto actual del medidor",                             "IMAGEN",      true,  false, LlenadoPor.CLIENTE,     null),
-                        campo("tipo_inmueble",     "Tipo de inmueble",                                    "SELECTOR",    true,  false, LlenadoPor.CLIENTE,
+                        campo("nombre_cedente",         "Nombre completo del titular actual (cedente)",        "TEXTO_CORTO", true,  false, LlenadoPor.CLIENTE,     null),
+                        campo("ci_cedente",             "Cédula del titular actual (imagen o PDF)",            "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
+                        campo("nombre_cesionario",      "Nombre completo del nuevo titular (cesionario)",      "TEXTO_CORTO", true,  false, LlenadoPor.CLIENTE,     null),
+                        campo("ci_cesionario",          "Cédula del nuevo titular (imagen o PDF)",             "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
+                        campo("poder_notarial",         "Poder notarial o declaración de transferencia (PDF)", "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
+                        campo("planilla_datos",         "Planilla de datos del nuevo titular (Excel)",         "ARCHIVO",     true,  false, LlenadoPor.CLIENTE,     null),
+                        campo("numero_medidor",         "Número del medidor a transferir",                     "NUMERO",      true,  false, LlenadoPor.CLIENTE,     null),
+                        campo("foto_medidor",           "Foto actual del medidor",                             "IMAGEN",      true,  false, LlenadoPor.CLIENTE,     null),
+                        campo("tipo_inmueble",          "Tipo de inmueble",                                    "SELECTOR",    true,  false, LlenadoPor.CLIENTE,
                                 List.of("Casa", "Departamento", "Local comercial", "Terreno", "Otro")),
-                        campo("recepcion_ok",      "Solicitud recibida y documentos cargados",            "SELECTOR",    true,  true,  LlenadoPor.FUNCIONARIO,
-                                List.of("Aprobado", "Rechazado"))
+                        campo("documentos_faltantes",   "Documentos faltantes u observaciones",               "AREA_TEXTO",  false, false, LlenadoPor.FUNCIONARIO, null),
+                        campo("resultado_verificacion", "Resultado de la revisión documental",                 "SELECTOR",    true,  true,  LlenadoPor.FUNCIONARIO,
+                                List.of("Válida — proceder", "Inválida — notificar faltantes"))
                 ))
                 .build());
         nodo1.setFormularioId(fNodo1.getId());
         nodoRepository.save(nodo1);
 
-        // Nodo 2: FUNCIONARIO verifica cada documento individualmente
-        Formulario fNodo2 = formularioRepository.save(Formulario.builder()
-                .politicaId(pol.getId()).nodoId(nodo2.getId())
-                .nombre("Verificación documental")
-                .activo(true)
-                .campos(List.of(
-                        campo("info_checklist",         "Verificar CI cedente, CI cesionario y poder notarial antes de continuar.",
-                                "ETIQUETA",    false, false, LlenadoPor.FUNCIONARIO, null),
-                        campo("ci_cedente_ok",          "CI del cedente",                                  "RADIO",       true,  false, LlenadoPor.FUNCIONARIO,
-                                List.of("Válida", "Inválida o ilegible")),
-                        campo("ci_cesionario_ok",       "CI del cesionario",                               "RADIO",       true,  false, LlenadoPor.FUNCIONARIO,
-                                List.of("Válida", "Inválida o ilegible")),
-                        campo("poder_notarial_ok",      "Poder notarial",                                  "RADIO",       true,  false, LlenadoPor.FUNCIONARIO,
-                                List.of("Válido", "Inválido o vencido")),
-                        campo("checklist_excel",        "Checklist de verificación (Excel)",               "ARCHIVO",     true,  false, LlenadoPor.FUNCIONARIO, null),
-                        campo("resultado_verificacion", "Resultado de la verificación documental",         "SELECTOR",    true,  true,  LlenadoPor.FUNCIONARIO,
-                                List.of("Válida — proceder", "Inválida — notificar faltantes")),
-                        campo("documentos_faltantes",   "Documentos faltantes u observaciones",            "AREA_TEXTO",  false, false, LlenadoPor.FUNCIONARIO, null)
-                ))
-                .build());
-        nodo2.setFormularioId(fNodo2.getId());
-        nodoRepository.save(nodo2);
-
         // Nodo 3: FUNCIONARIO Legal elabora el nuevo contrato
+        resetCampoOrden();
         Formulario fNodo3 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo3.getId())
                 .nombre("Elaboración del nuevo contrato")
@@ -621,7 +615,8 @@ public class DataSeeder {
                         campo("nuevo_contrato",    "Nuevo contrato de servicio (Word — editar en OnlyOffice)", "ARCHIVO",     true,  false, LlenadoPor.FUNCIONARIO, null),
                         campo("numero_contrato",   "Número del nuevo contrato",                                "TEXTO_CORTO", true,  false, LlenadoPor.FUNCIONARIO, null),
                         campo("fecha_vigencia",    "Fecha de inicio de vigencia",                             "FECHA",       true,  false, LlenadoPor.FUNCIONARIO, null),
-                        campo("tabla_condiciones", "Tabla de condiciones especiales del contrato",            "TABLA_GRID",  false, false, LlenadoPor.FUNCIONARIO, null),
+                        campoGrid("tabla_condiciones", "Tabla de condiciones especiales del contrato", false, LlenadoPor.FUNCIONARIO,
+                                List.of("Condición", "Descripción", "Valor")),
                         campo("resultado_contrato","Contrato elaborado",                                      "SELECTOR",    true,  true,  LlenadoPor.FUNCIONARIO,
                                 List.of("Aprobado", "Requiere correcciones"))
                 ))
@@ -630,6 +625,7 @@ public class DataSeeder {
         nodoRepository.save(nodo3);
 
         // Nodo 4: FUNCIONARIO Facturación actualiza el sistema
+        resetCampoOrden();
         Formulario fNodo4 = formularioRepository.save(Formulario.builder()
                 .politicaId(pol.getId()).nodoId(nodo4.getId())
                 .nombre("Actualización de datos de facturación")
@@ -646,16 +642,15 @@ public class DataSeeder {
         nodoRepository.save(nodo4);
 
         // Transiciones
-        crearTransicion(pol.getId(), inicio.getId(), nodo1.getId(),     "LINEAL",      null,                           null);
-        crearTransicion(pol.getId(), nodo1.getId(),  nodo2.getId(),     "LINEAL",      null,                           null);
-        crearTransicion(pol.getId(), nodo2.getId(),  nodo3.getId(),     "ALTERNATIVA", "Válida — proceder",            null);
-        crearTransicion(pol.getId(), nodo2.getId(),  finRechazo.getId(),"ALTERNATIVA", "Inválida — notificar faltantes", null);
-        crearTransicion(pol.getId(), nodo3.getId(),  nodo4.getId(),     "ALTERNATIVA", "Aprobado",                     null);
-        crearTransicion(pol.getId(), nodo3.getId(),  nodo3.getId(),     "ALTERNATIVA", "Requiere correcciones",        null);
-        crearTransicion(pol.getId(), nodo4.getId(),  fin.getId(),       "LINEAL",      null,                           null);
+        crearTransicion(pol.getId(), inicio.getId(), nodo1.getId(),      "LINEAL",      null,                             null);
+        crearTransicion(pol.getId(), nodo1.getId(),  nodo3.getId(),      "ALTERNATIVA", "Válida — proceder",              null);
+        crearTransicion(pol.getId(), nodo1.getId(),  finRechazo.getId(), "ALTERNATIVA", "Inválida — notificar faltantes", null);
+        crearTransicion(pol.getId(), nodo3.getId(),  nodo4.getId(),      "ALTERNATIVA", "Aprobado",                       null);
+        crearTransicion(pol.getId(), nodo3.getId(),  nodo3.getId(),      "ALTERNATIVA", "Requiere correcciones",          null);
+        crearTransicion(pol.getId(), nodo4.getId(),  fin.getId(),        "LINEAL",      null,                             null);
 
         aplicarLayoutSeeder(
-                List.of(inicio, nodo1, nodo2, nodo3, nodo4, fin, finRechazo),
+                List.of(inicio, nodo1, nodo3, nodo4, fin, finRechazo),
                 transicionRepository.findByPoliticaIdAndActivoTrue(pol.getId()),
                 List.of(at, le, fa)
         );
@@ -725,6 +720,13 @@ public class DataSeeder {
      * con los valores del enum TipoCampo (TEXTO_CORTO, AREA_TEXTO, ETIQUETA,
      * NUMERO, FECHA, SELECTOR, RADIO, CHECKBOX, ARCHIVO, IMAGEN, TABLA_GRID).
      */
+    // counter used to assign sequential orden within each formulario
+    private int campoOrdenCounter = 0;
+
+    private void resetCampoOrden() {
+        campoOrdenCounter = 0;
+    }
+
     private Formulario.CampoFormulario campo(String nombre, String etiqueta, String tipo,
                                               boolean requerido, boolean esPrioridad,
                                               LlenadoPor llenadoPor, List<String> opciones) {
@@ -737,6 +739,23 @@ public class DataSeeder {
                 .llenadoPor(llenadoPor)
                 .requeridoParaAvanzar(requerido && LlenadoPor.FUNCIONARIO.equals(llenadoPor) && esPrioridad)
                 .opciones(opciones)
+                .orden(campoOrdenCounter++)
+                .build();
+    }
+
+    private Formulario.CampoFormulario campoGrid(String nombre, String etiqueta,
+                                                  boolean requerido, LlenadoPor llenadoPor,
+                                                  List<String> columnas) {
+        return Formulario.CampoFormulario.builder()
+                .nombre(nombre)
+                .etiqueta(etiqueta)
+                .tipo("TABLA_GRID")
+                .requerido(requerido)
+                .esCampoPrioridad(false)
+                .llenadoPor(llenadoPor)
+                .requeridoParaAvanzar(false)
+                .columnas(columnas)
+                .orden(campoOrdenCounter++)
                 .build();
     }
 
