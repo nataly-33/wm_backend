@@ -55,5 +55,15 @@ public class Formulario {
         private LlenadoPor llenadoPor;
         /** Si es FUNCIONARIO y true, el motor de workflow espera que lo llene antes de avanzar */
         private Boolean requeridoParaAvanzar;
+        /** Posicion del campo en el formulario para respetar el orden estricto (0-based) */
+        private Integer orden;
+
+        public List<String> getColumnasGrid() {
+            return columnas;
+        }
+
+        public void setColumnasGrid(List<String> columnasGrid) {
+            this.columnas = columnasGrid;
+        }
     }
 }

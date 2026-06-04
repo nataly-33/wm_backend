@@ -19,6 +19,7 @@ public class FormularioCampoRequest {
     private List<String> opciones;
     private Integer filas;
     private List<String> columnas;
+    private List<String> columnasGrid;
     private LlenadoPor llenadoPor;
     private Boolean requeridoParaAvanzar;
 }

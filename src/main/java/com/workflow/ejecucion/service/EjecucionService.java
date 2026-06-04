@@ -81,6 +81,28 @@ public class EjecucionService {
         return resultado;
     }
 
+    public List<EjecucionDetalladaResponse> listarHistorialPorFuncionarioDetallado(String funcionarioId) {
+        List<EjecucionNodo> ejecuciones = ejecucionNodoRepository.findByFuncionarioIdAndEstadoIn(
+                funcionarioId,
+                List.of("COMPLETADO", "RECHAZADO")
+        );
+
+        List<EjecucionDetalladaResponse> resultado = ejecuciones.stream()
+                .map(this::enriquecerEjecucion)
+                .collect(Collectors.toList());
+
+        // Ordenar por iniciadoEn desc
+        resultado.sort((a, b) -> {
+            LocalDateTime fa = a.getIniciadoEn();
+            LocalDateTime fb = b.getIniciadoEn();
+            if (fa == null) return 1;
+            if (fb == null) return -1;
+            return fb.compareTo(fa);
+        });
+
+        return resultado;
+    }
+
     private int prioridadOrden(String prioridad) {
         if (prioridad == null) return 2;
         return switch (prioridad) {
@@ -334,6 +356,11 @@ public class EjecucionService {
             Nodo nodo = nodoRepository.findById(e.getNodoId()).orElse(null);
             return nodo != null && solicitante.getDepartamentoId() != null
                     && solicitante.getDepartamentoId().equals(nodo.getDepartamentoId());
+        }
+        if ("CLIENTE".equals(solicitante.getRol())) {
+            return tramiteRepository.findById(e.getTramiteId())
+                    .map(t -> solicitante.getId().equals(t.getIniciadoPor()))
+                    .orElse(false);
         }
         return solicitante.getId().equals(e.getFuncionarioId());
     }

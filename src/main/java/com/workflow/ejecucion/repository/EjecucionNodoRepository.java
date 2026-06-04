@@ -22,6 +22,7 @@ public interface EjecucionNodoRepository extends MongoRepository<EjecucionNodo, 
     List<EjecucionNodo> findByNodoIdAndEstadoIn(String nodoId, List<String> estados);
     List<EjecucionNodo> findByNodoId(String nodoId);
 
+    Optional<EjecucionNodo> findByTramiteIdAndNodoId(String tramiteId, String nodoId);
     Optional<EjecucionNodo> findByTramiteIdAndNodoIdAndFase(String tramiteId, String nodoId, FaseNodo fase);
     List<EjecucionNodo> findByFuncionarioIdAndFase(String funcionarioId, FaseNodo fase);
     List<EjecucionNodo> findByTramiteIdOrderByCreadoEnAsc(String tramiteId);

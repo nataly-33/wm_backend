@@ -12,6 +12,7 @@ import com.workflow.formulario.model.LlenadoPor;
 import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.ejecucion.repository.EjecucionNodoRepository;
 import com.workflow.tramite.service.MotorWorkflowService;
+import com.workflow.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,6 +30,7 @@ public class EjecucionController {
     private final MotorWorkflowService motorWorkflowService;
     private final EjecucionNodoRepository ejecucionNodoRepository;
     private final FormularioRepository formularioRepository;
+    private final UsuarioRepository usuarioRepository;
 
     @GetMapping("/departamento/{departamentoId}")
     public ResponseEntity<?> listarPorDepartamento(@PathVariable String departamentoId) {
@@ -39,6 +41,12 @@ public class EjecucionController {
     @GetMapping("/funcionario/{usuarioId}")
     public ResponseEntity<?> listarPorFuncionario(@PathVariable String usuarioId) {
         List<EjecucionDetalladaResponse> ejecuciones = ejecucionService.listarPorFuncionarioDetallado(usuarioId);
+        return ResponseEntity.ok(Map.of("data", ejecuciones));
+    }
+
+    @GetMapping("/funcionario/{usuarioId}/historial")
+    public ResponseEntity<?> listarHistorialPorFuncionario(@PathVariable String usuarioId) {
+        List<EjecucionDetalladaResponse> ejecuciones = ejecucionService.listarHistorialPorFuncionarioDetallado(usuarioId);
         return ResponseEntity.ok(Map.of("data", ejecuciones));
     }
 
@@ -131,8 +139,14 @@ public class EjecucionController {
             @RequestBody Map<String, Object> respuestas,
             @AuthenticationPrincipal UserDetails user) {
         try {
-            String username = user != null ? user.getUsername() : null;
-            motorWorkflowService.funcionarioCompletadoNodo(id, respuestas, username);
+            // Resolver el ID MongoDB del usuario a partir de su email (username del JWT)
+            String funcionarioId = null;
+            if (user != null) {
+                funcionarioId = usuarioRepository.findByEmailAndActivoTrue(user.getUsername())
+                        .map(u -> u.getId())
+                        .orElse(user.getUsername()); // fallback al email si no se encuentra
+            }
+            motorWorkflowService.funcionarioCompletadoNodo(id, respuestas, funcionarioId);
             return ResponseEntity.ok(Map.of("mensaje", "Nodo completado por funcionario"));
         } catch (IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of("mensaje", e.getMessage()));

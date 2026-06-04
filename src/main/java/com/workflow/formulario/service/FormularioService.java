@@ -4,6 +4,7 @@ import com.workflow.formulario.dto.CrearFormularioRequest;
 import com.workflow.formulario.dto.FormularioCampoRequest;
 import com.workflow.formulario.dto.FormularioResponse;
 import com.workflow.formulario.model.Formulario;
+import com.workflow.formulario.model.LlenadoPor;
 import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
@@ -73,18 +74,26 @@ public class FormularioService {
         if (campos == null) {
             return List.of();
         }
-        return campos.stream().map(campo -> Formulario.CampoFormulario.builder()
-                .nombre(campo.getNombre())
-                .etiqueta(campo.getEtiqueta())
-                .tipo(campo.getTipo())
-                .requerido(campo.getRequerido())
-                .esCampoPrioridad(campo.getEsCampoPrioridad())
-                .opciones(campo.getOpciones())
-                .filas(campo.getFilas())
-                .columnas(campo.getColumnas())
-                .llenadoPor(campo.getLlenadoPor())
-                .requeridoParaAvanzar(campo.getRequeridoParaAvanzar())
-                .build()).toList();
+        return campos.stream().map(campo -> {
+            String tipoNorm = campo.getTipo();
+            if ("TEXTO".equalsIgnoreCase(tipoNorm)) tipoNorm = "TEXTO_CORTO";
+            else if ("TEXTAREA".equalsIgnoreCase(tipoNorm)) tipoNorm = "AREA_TEXTO";
+            else if ("SELECCION".equalsIgnoreCase(tipoNorm)) tipoNorm = "SELECTOR";
+            else if ("GRID".equalsIgnoreCase(tipoNorm)) tipoNorm = "TABLA_GRID";
+
+            return Formulario.CampoFormulario.builder()
+                    .nombre(campo.getNombre())
+                    .etiqueta(campo.getEtiqueta())
+                    .tipo(tipoNorm)
+                    .requerido(campo.getRequerido())
+                    .esCampoPrioridad(campo.getEsCampoPrioridad())
+                    .opciones(campo.getOpciones())
+                    .filas(campo.getFilas())
+                    .columnas(campo.getColumnas() != null ? campo.getColumnas() : campo.getColumnasGrid())
+                    .llenadoPor(campo.getLlenadoPor() != null ? campo.getLlenadoPor() : com.workflow.formulario.model.LlenadoPor.FUNCIONARIO)
+                    .requeridoParaAvanzar(campo.getRequeridoParaAvanzar())
+                    .build();
+        }).toList();
     }
 
     public FormularioResponse crear(String empresaId, String userId, String rol, CrearFormularioRequest request) {
