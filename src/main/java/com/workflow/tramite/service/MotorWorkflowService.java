@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -328,16 +329,31 @@ public class MotorWorkflowService {
             return;
         }
 
+        // Determinar fase inicial segun si el formulario tiene campos CLIENTE.
+        // null en llenadoPor se trata como FUNCIONARIO (convencion del seeder).
+        FaseNodo faseInicial = FaseNodo.ESPERANDO_FUNCIONARIO;
+        Optional<Formulario> formOpt = formularioRepository.findByNodoIdAndActivoTrue(nodoId);
+        if (formOpt.isPresent() && formOpt.get().getCampos() != null) {
+            boolean tieneCliente = formOpt.get().getCampos().stream()
+                    .anyMatch(c -> LlenadoPor.CLIENTE.equals(c.getLlenadoPor()));
+            if (tieneCliente) faseInicial = FaseNodo.ESPERANDO_CLIENTE;
+        }
+
         AsignacionUsuario asignacion = buscarFuncionarioAsignado(tramite.getEmpresaId(), nodoDestino.getDepartamentoId());
 
         EjecucionNodo nuevaEjecucion = EjecucionNodo.builder()
                 .tramiteId(tramite.getId())
                 .nodoId(nodoId)
+                .politicaId(tramite.getPoliticaId())
+                .clienteId(tramite.getClienteId())
                 .departamentoId(nodoDestino.getDepartamentoId())
-                .funcionarioId(asignacion.funcionarioId())
-                .estado(asignacion.estado())
+                .fase(faseInicial)
+                .funcionarioId(faseInicial == FaseNodo.ESPERANDO_FUNCIONARIO ? asignacion.funcionarioId() : null)
+                .estado(faseInicial == FaseNodo.ESPERANDO_CLIENTE ? "ESPERANDO_CLIENTE" : asignacion.estado())
                 .iniciadoEn(null)
                 .respuestaFormulario(null)
+                .respuestasCliente(new java.util.HashMap<>())
+                .respuestasFuncionario(new java.util.HashMap<>())
                 .archivosAdjuntos(new ArrayList<>())
                 .build();
 
@@ -345,7 +361,10 @@ public class MotorWorkflowService {
 
         tramite.setNodoActualId(nodoId);
 
-        if ("PENDIENTE_SIN_ASIGNAR".equals(asignacion.estado())) {
+        if (faseInicial == FaseNodo.ESPERANDO_CLIENTE) {
+            // No notificar al funcionario aun; el agente cliente llenara el formulario primero
+            log.info("Nodo {} tiene campos CLIENTE: ejecucion {} en fase ESPERANDO_CLIENTE", nodoId, nuevaEjecucion.getId());
+        } else if ("PENDIENTE_SIN_ASIGNAR".equals(asignacion.estado())) {
             Departamento depto = departamentoRepository.findById(nodoDestino.getDepartamentoId()).orElse(null);
             String nombreDepto = depto != null ? depto.getNombre() : nodoDestino.getDepartamentoId();
             notificarAdminsGenerales(
@@ -401,6 +420,9 @@ public class MotorWorkflowService {
     }
 
     private AsignacionUsuario buscarFuncionarioAsignado(String empresaId, String departamentoId) {
+        if (departamentoId == null || departamentoId.isBlank()) {
+            return new AsignacionUsuario(null, "PENDIENTE_SIN_ASIGNAR");
+        }
         List<Usuario> funcionarios = usuarioRepository.findByDepartamentoIdAndActivoTrue(departamentoId).stream()
                 .filter(u -> "FUNCIONARIO".equals(u.getRol()))
                 .collect(Collectors.toList());
@@ -436,7 +458,12 @@ public class MotorWorkflowService {
 
     private String extraerValorDecision(EjecucionNodo ejecucionAnterior) {
         String valorDecision = "";
-        Map<String, Object> respuesta = ejecucionAnterior.getRespuestaFormulario();
+        // En flujo bifasico las respuestas del funcionario van a respuestasFuncionario;
+        // en flujo simple van a respuestaFormulario. Priorizar el mapa no vacío.
+        Map<String, Object> respuesta = ejecucionAnterior.getRespuestasFuncionario() != null
+                && !ejecucionAnterior.getRespuestasFuncionario().isEmpty()
+                ? ejecucionAnterior.getRespuestasFuncionario()
+                : ejecucionAnterior.getRespuestaFormulario();
         Formulario formulario = formularioRepository.findByNodoIdAndActivoTrue(ejecucionAnterior.getNodoId()).orElse(null);
 
         if (formulario != null && respuesta != null) {
@@ -491,6 +518,36 @@ public class MotorWorkflowService {
         log.info("Emitiendo evento WebSocket NODO_COMPLETADO al canal /topic/politica/{}: tramite={}, nodoAnterior={}, nodoActual={}",
                 tramite.getPoliticaId(), tramite.getId(), nodoAnteriorId, nodoActualId);
         notificacionService.notificarCambioMonitor(tramite.getPoliticaId(), evento);
+
+        // Notificar al cliente via agente conversacional
+        if (tramite.getClienteId() != null) {
+            try {
+                // Determinar si el siguiente nodo requiere datos del cliente
+                String decisionAgente = determinarDecisionAgente(tramite, nodoActualId);
+                agenteService.notificarClienteDecision(tramite.getId(), decisionAgente, nodoActualId);
+            } catch (Exception e) {
+                log.warn("No se pudo notificar al cliente del avance de nodo: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Determina que tipo de decision enviar al agente segun si el siguiente nodo
+     * tiene campos que debe rellenar el cliente o no.
+     */
+    private String determinarDecisionAgente(Tramite tramite, String nodoSiguienteId) {
+        if (nodoSiguienteId == null) {
+            return "TRAMITE_EN_PROCESO";
+        }
+        Optional<Formulario> formOpt = formularioRepository.findByNodoIdAndActivoTrue(nodoSiguienteId);
+        if (formOpt.isPresent() && formOpt.get().getCampos() != null) {
+            boolean tieneCliente = formOpt.get().getCampos().stream()
+                    .anyMatch(c -> LlenadoPor.CLIENTE.equals(c.getLlenadoPor()));
+            if (tieneCliente) {
+                return "APROBADO_SIGUIENTE_NODO";
+            }
+        }
+        return "TRAMITE_EN_PROCESO";
     }
 
     private void marcarTramiteComoCompletado(Tramite tramite) {
@@ -588,6 +645,8 @@ public class MotorWorkflowService {
                                       Map<String, Object> respuestasCliente) {
         EjecucionNodo ejecucion = ejecucionNodoRepository
                 .findByTramiteIdAndNodoIdAndFase(tramiteId, nodoId, FaseNodo.ESPERANDO_CLIENTE)
+                .or(() -> ejecucionNodoRepository.findByTramiteIdAndNodoId(tramiteId, nodoId)
+                        .filter(e -> e.getFase() == null || FaseNodo.ESPERANDO_CLIENTE.equals(e.getFase())))
                 .orElseThrow(() -> new RuntimeException(
                         "No hay ejecución en fase CLIENTE para nodo: " + nodoId));
 
@@ -606,6 +665,17 @@ public class MotorWorkflowService {
 
         Nodo nodo = nodoRepository.findById(nodoId).orElseThrow();
         notificarAsignacionFuncionario(tramite, ejecucion, nodo);
+
+        // Emitir evento al monitor para que actualice la fase en tiempo real
+        Map<String, Object> eventoFase = new HashMap<>();
+        eventoFase.put("tipo", "FASE_CAMBIADA");
+        eventoFase.put("tramiteId", tramiteId);
+        eventoFase.put("nodoId", nodoId);
+        eventoFase.put("fase", "ESPERANDO_FUNCIONARIO");
+        Tramite tramiteRef = tramiteRepository.findById(tramiteId).orElse(null);
+        if (tramiteRef != null) {
+            notificacionService.notificarCambioMonitor(tramiteRef.getPoliticaId(), eventoFase);
+        }
     }
 
     /**
@@ -618,9 +688,14 @@ public class MotorWorkflowService {
         EjecucionNodo ejecucion = ejecucionNodoRepository.findById(ejecucionId)
                 .orElseThrow(() -> new RuntimeException("Ejecución no encontrada"));
 
-        if (ejecucion.getFase() != FaseNodo.ESPERANDO_FUNCIONARIO) {
+        if (ejecucion.getFase() != null
+                && ejecucion.getFase() != FaseNodo.ESPERANDO_FUNCIONARIO
+                && ejecucion.getFase() != FaseNodo.ESPERANDO_CLIENTE) {
             throw new IllegalStateException(
                     "El nodo no está en fase de revisión del funcionario. Fase actual: " + ejecucion.getFase());
+        }
+        if (ejecucion.getFase() == FaseNodo.ESPERANDO_CLIENTE) {
+            log.warn("funcionarioCompletadoNodo: ejecucion {} estaba en ESPERANDO_CLIENTE (el cliente no completo el formulario). Avanzando de todas formas.", ejecucionId);
         }
 
         ejecucion.setRespuestasFuncionario(respuestasFuncionario);

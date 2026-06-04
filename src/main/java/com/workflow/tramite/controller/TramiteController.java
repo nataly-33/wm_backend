@@ -1,5 +1,7 @@
 package com.workflow.tramite.controller;
 
+import com.workflow.ejecucion.dto.NodoHistorialResponse;
+import com.workflow.ejecucion.service.EjecucionService;
 import com.workflow.tramite.dto.TramiteDetalladoResponse;
 import com.workflow.tramite.model.Tramite;
 import com.workflow.tramite.service.TramiteService;
@@ -15,6 +17,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class TramiteController {
     private final TramiteService tramiteService;
+    private final EjecucionService ejecucionService;
 
     @PostMapping
     public ResponseEntity<?> iniciarTramite(
@@ -74,5 +77,17 @@ public class TramiteController {
     @GetMapping("/monitor/{politicaId}")
     public ResponseEntity<?> monitor(@PathVariable String politicaId) {
         return ResponseEntity.ok(Map.of("data", tramiteService.obtenerEstadoMonitor(politicaId)));
+    }
+
+    @GetMapping("/{tramiteId}/historial-formularios")
+    public ResponseEntity<List<NodoHistorialResponse>> historialFormularios(
+            @PathVariable String tramiteId,
+            @RequestAttribute(value = "userId", required = false) String userId) {
+        if (userId == null || userId.isBlank()) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(
+            ejecucionService.obtenerHistorialCompleto(tramiteId, userId)
+        );
     }
 }

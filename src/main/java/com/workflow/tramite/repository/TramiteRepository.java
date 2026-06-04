@@ -11,6 +11,9 @@ public interface TramiteRepository extends MongoRepository<Tramite, String> {
     List<Tramite> findByIdIn(List<String> ids);
     List<Tramite> findByEmpresaId(String empresaId);
     List<Tramite> findByPoliticaId(String politicaId);
+    long countByPoliticaId(String politicaId);
+    List<Tramite> findByClienteId(String clienteId);
+    List<Tramite> findByClienteIdOrderByIniciadoEnDesc(String clienteId);
     List<Tramite> findByPoliticaIdAndEstadoGeneralIn(String politicaId, List<String> estados);
     // Para ver los iniciados por un admin o funcionario
     List<Tramite> findByIniciadoPor(String usuarioId);

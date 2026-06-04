@@ -41,6 +41,9 @@ public class Tramite {
     @Field("fecha_limite")
     private LocalDateTime fechaLimite;
 
+    @Field("cliente_id")
+    private String clienteId; // ID del cliente que inició el trámite vía agente
+
     @Field("iniciado_por")
     private String iniciadoPor; // Usuario ID
 

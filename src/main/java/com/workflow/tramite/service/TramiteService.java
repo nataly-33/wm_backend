@@ -3,6 +3,7 @@ package com.workflow.tramite.service;
 import com.workflow.departamento.model.Departamento;
 import com.workflow.departamento.repository.DepartamentoRepository;
 import com.workflow.ejecucion.model.EjecucionNodo;
+import com.workflow.ejecucion.model.FaseNodo;
 import com.workflow.ejecucion.repository.EjecucionNodoRepository;
 import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
@@ -44,6 +45,19 @@ public class TramiteService {
         String politicaId = (String) body.get("politicaId");
         String titulo = (String) body.get("titulo");
         String prioridad = (String) body.get("prioridad");
+        String clienteId = (String) body.get("clienteId");
+
+        if (clienteId == null || clienteId.isBlank()) {
+            throw new IllegalArgumentException(
+                    "No se puede iniciar un trámite sin un cliente asignado. " +
+                    "El trámite debe ser iniciado por el cliente a través del agente " +
+                    "o el Admin General debe seleccionar un cliente.");
+        }
+
+        usuarioRepository.findById(clienteId)
+                .filter(u -> "CLIENTE".equals(u.getRol()))
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "El usuario con id '" + clienteId + "' no existe o no tiene rol CLIENTE."));
 
         Nodo nodoInicio = nodoRepository.findByPoliticaIdAndActivoTrue(politicaId).stream()
                 .filter(n -> "INICIO".equals(n.getTipo()))
@@ -57,6 +71,7 @@ public class TramiteService {
                 .prioridad(prioridad != null ? prioridad : "MEDIA")
                 .estadoGeneral("PENDIENTE")
                 .iniciadoPor(iniciadoPor)
+                .clienteId(clienteId)
                 .nodosParalelosPendientes(new ArrayList<>())
                 .iteracionesPorNodo(new HashMap<>())
                 .build();
@@ -355,6 +370,17 @@ public class TramiteService {
                     tramItem.put("ejecucionId", ejec.getId());
                     tramItem.put("funcionarioNombre", funcNombre);
                     tramItem.put("tiempoTranscurrido", calcularTiempoTranscurrido(ejec.getIniciadoEn()));
+
+                    // Etiqueta de fase legible para el monitor
+                    String faseLabel = "funcionario"; // valor por defecto
+                    if (ejec.getFase() != null) {
+                        faseLabel = switch (ejec.getFase().name()) {
+                            case "ESPERANDO_CLIENTE"     -> "cliente-chatbot";
+                            case "ESPERANDO_FUNCIONARIO" -> "funcionario";
+                            default                      -> ejec.getFase().name().toLowerCase();
+                        };
+                    }
+                    tramItem.put("fase", faseLabel);
                     tramitesEnNodo.add(tramItem);
                 }
 
