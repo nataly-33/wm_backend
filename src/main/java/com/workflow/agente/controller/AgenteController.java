@@ -85,6 +85,22 @@ public class AgenteController {
     }
 
     /**
+     * Obtiene la conversacion activa del cliente al abrir el chat (para restaurar el estado).
+     * Si no hay conversacion activa o expiro (2 horas de inactividad) devuelve tieneConversacionActiva=false.
+     */
+    @GetMapping("/conversacion-activa")
+    public ResponseEntity<?> obtenerConversacionActiva(
+            @RequestParam(required = false) String clienteId,
+            @RequestAttribute(value = "userId", required = false) String userId) {
+        String id = clienteId != null ? clienteId : userId;
+        if (id == null || id.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "Se requiere clienteId"));
+        }
+        Map<String, Object> resultado = agenteService.obtenerConversacionActualCliente(id);
+        return ResponseEntity.ok(resultado);
+    }
+
+    /**
      * Estado actual del tramite del cliente.
      */
     @GetMapping("/estado-tramite/{tramiteId}")

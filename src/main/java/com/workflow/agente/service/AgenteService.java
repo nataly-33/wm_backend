@@ -7,6 +7,9 @@ import com.workflow.agente.model.MensajeChat;
 import com.workflow.agente.repository.ConversacionAgenteRepository;
 import com.workflow.departamento.model.Departamento;
 import com.workflow.departamento.repository.DepartamentoRepository;
+import com.workflow.ejecucion.model.EjecucionNodo;
+import com.workflow.ejecucion.model.FaseNodo;
+import com.workflow.ejecucion.repository.EjecucionNodoRepository;
 import com.workflow.formulario.model.Formulario;
 import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.nodo.model.Nodo;
@@ -44,6 +47,7 @@ public class AgenteService {
     private final NotificacionService notificacionService;
     private final UsuarioRepository usuarioRepository;
     private final MotorWorkflowService motorWorkflowService;
+    private final EjecucionNodoRepository ejecucionNodoRepository;
     private final RestTemplate restTemplate;
 
     @Value("${ia.service.url:http://localhost:8001}")
@@ -51,11 +55,18 @@ public class AgenteService {
 
     // ─── Obtener conversacion activa eliminando duplicados ────────────────────
 
+    /** Tiempo de inactividad tras el cual la conversacion expira (2 horas) */
+    private static final int INACTIVIDAD_HORAS = 2;
+
     private ConversacionAgente obtenerConversacionActiva(String clienteId) {
+        LocalDateTime limite = LocalDateTime.now().minusHours(INACTIVIDAD_HORAS);
+
         List<ConversacionAgente> activas = conversacionRepository
                 .findByClienteIdAndEstadoNot(clienteId, EstadoConversacion.COMPLETADO)
                 .stream()
                 .filter(c -> c.getEstado() != EstadoConversacion.RECHAZADO)
+                // Excluir conversaciones sin actividad reciente
+                .filter(c -> c.getUltimaActividadEn() == null || c.getUltimaActividadEn().isAfter(limite))
                 .sorted(Comparator.comparing(ConversacionAgente::getUltimaActividadEn,
                         Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
@@ -69,6 +80,21 @@ public class AgenteService {
         }
 
         return activas.get(0);
+    }
+
+    /** Carga la conversacion activa del cliente para restaurar el historial al reabrir el chat */
+    public Map<String, Object> obtenerConversacionActualCliente(String clienteId) {
+        ConversacionAgente conv = obtenerConversacionActiva(clienteId);
+        if (conv == null) {
+            return Map.of("tieneConversacionActiva", false);
+        }
+        return Map.of(
+                "tieneConversacionActiva", true,
+                "conversacionId", conv.getId(),
+                "estadoConversacion", conv.getEstado().name(),
+                "mensajes", conv.getMensajes() != null ? conv.getMensajes() : List.of(),
+                "tramiteId", conv.getTramiteId() != null ? conv.getTramiteId() : ""
+        );
     }
 
     // ─── Procesar mensaje del cliente ─────────────────────────────────────────
@@ -194,10 +220,10 @@ public class AgenteService {
             }
 
             if (politicaSugerida == null) {
-                agregarMensaje(conv, "agente", mensajeCliente != null ? mensajeCliente
-                        : "No entendi bien tu solicitud. Puedes decirme que tramite necesitas?", "texto");
-                return Map.of("mensajeAgente", mensajeCliente != null ? mensajeCliente
-                        : "No entendi bien tu solicitud.", "estado", conv.getEstado().name());
+                String msgNoDetectado = mensajeCliente != null ? mensajeCliente
+                        : "Cuentame que servicio o tramite necesitas. Por ejemplo: instalacion de medidor, reconexion de servicio, reclamo de factura.";
+                agregarMensaje(conv, "agente", msgNoDetectado, "texto");
+                return Map.of("mensajeAgente", msgNoDetectado, "estado", conv.getEstado().name());
             }
 
             String politicaId = (String) politicaSugerida.get("id");
@@ -215,8 +241,9 @@ public class AgenteService {
             conv.setEmpresaId(empresaId);
             conv.setEstado(EstadoConversacion.CONFIRMANDO_POLITICA);
 
+            String nombrePoliticaLimpio = nombrePolitica.replaceAll("^[A-Za-z]+_", "");
             String msg = mensajeCliente != null ? mensajeCliente
-                    : "Detecte que necesitas: " + nombrePolitica + ". Es correcto?";
+                    : "Deseas iniciar: " + nombrePoliticaLimpio + "?";
             agregarMensaje(conv, "agente", msg, "confirmacion");
 
             return Map.of("mensajeAgente", msg, "estado", "CONFIRMANDO_POLITICA",
@@ -266,30 +293,57 @@ public class AgenteService {
                 return Map.of("mensajeAgente", msg, "estado", "DETECTANDO_POLITICA");
             }
 
-            Politica politica = politicaRepository.findById(politicaId).orElse(null);
-            String nombrePolitica = politica != null ? politica.getNombre() : "el tramite";
+            // Iniciar el tramite directamente (sin CONFIRMACION_FINAL)
+            try {
+                Politica politica = politicaRepository.findById(politicaId).orElse(null);
+                String nombrePoliticaRaw = politica != null ? politica.getNombre() : "el tramite";
+                // Quitar prefijo tipo "Cliente_" o cualquier "Palabra_" al inicio
+                String nombrePolitica = nombrePoliticaRaw.replaceAll("^[A-Za-z]+_", "");
 
-            String nombreCliente = usuarioRepository.findByEmailAndActivoTrue(conv.getClienteId())
-                    .map(u -> u.getNombre() != null ? u.getNombre().split(" ")[0] : "Cliente")
-                    .orElse("Cliente");
+                String nombreCliente = usuarioRepository.findByEmailAndActivoTrue(conv.getClienteId())
+                        .map(u -> u.getNombre() != null ? u.getNombre().split(" ")[0] : "Cliente")
+                        .orElse("Cliente");
 
-            long numTramite = tramiteRepository.countByPoliticaId(politicaId) + 1;
-            String nombreTramite = nombreCliente + "_" + nombrePolitica;
+                String nombreTramite = nombreCliente + "_" + nombrePolitica;
+                String empresaId = politica != null ? politica.getEmpresaId() : conv.getEmpresaId();
 
-            conv.setPoliticaId(politicaId);
-            if (politica != null) {
-                conv.setEmpresaId(politica.getEmpresaId());
+                // Mensaje de confirmacion unico: muestra solo el nombre de la politica (sin prefijo del cliente)
+                String msgInicio = "Iniciando tramite: " + nombrePolitica + ". Un momento...";
+                agregarMensaje(conv, "agente", msgInicio, "texto");
+
+                Nodo nodoInicio = nodoRepository.findByPoliticaIdAndActivoTrue(politicaId).stream()
+                        .filter(n -> "INICIO".equals(n.getTipo()))
+                        .findFirst()
+                        .orElseThrow(() -> new RuntimeException("La politica no tiene nodo INICIO"));
+
+                Tramite tramite = Tramite.builder()
+                        .politicaId(politicaId)
+                        .empresaId(empresaId)
+                        .titulo(nombreTramite)
+                        .prioridad("MEDIA")
+                        .estadoGeneral("PENDIENTE")
+                        .iniciadoPor(conv.getClienteId())
+                        .clienteId(conv.getClienteId())
+                        .nodosParalelosPendientes(new ArrayList<>())
+                        .iteracionesPorNodo(new HashMap<>())
+                        .build();
+
+                Tramite tramiteCreado = motorWorkflowService.iniciarTramite(tramite, nodoInicio.getId());
+
+                conv.setTramiteId(tramiteCreado.getId());
+                conv.setNodoActualId(tramiteCreado.getNodoActualId());
+                conv.setEstado(EstadoConversacion.RECOPILANDO_DATOS_NODO);
+                conv.setDatosRecopilados(new HashMap<>());
+                conversacionRepository.save(conv);
+
+                return iniciarRecopilacionNodo(conv);
+
+            } catch (Exception e) {
+                log.error("Error iniciando tramite para cliente {}: {}", conv.getClienteId(), e.getMessage());
+                String msg = "Hubo un problema al iniciar tu tramite. Por favor intenta de nuevo.";
+                agregarMensaje(conv, "agente", msg, "error");
+                return Map.of("mensajeAgente", msg, "estado", conv.getEstado().name());
             }
-            conv.setEstado(EstadoConversacion.CONFIRMACION_FINAL);
-            conv.setNombreTramitePropuesto(nombreTramite);
-            conversacionRepository.save(conv);
-
-            String msgConfirmacion = String.format(
-                    "Estas seguro de iniciar el tramite #%d - %s?\n\nResponde si para confirmar o no para cancelar.",
-                    numTramite, nombreTramite
-            );
-            agregarMensaje(conv, "agente", msgConfirmacion, "confirmacion");
-            return Map.of("mensajeAgente", msgConfirmacion, "estado", "CONFIRMACION_FINAL");
         }
 
         if (nego) {
@@ -309,64 +363,19 @@ public class AgenteService {
         if (conv.getDatosRecopilados() != null) {
             politicaNombre = (String) conv.getDatosRecopilados().getOrDefault("politicaNombrePropuesta", "el tramite");
         }
+        // Limpiar el prefijo del nombre de la politica antes de mostrarlo
+        politicaNombre = politicaNombre.replaceAll("^[A-Za-z]+_", "");
         String msg = "Confirmas que quieres iniciar \"" + politicaNombre + "\"? Responde si o no.";
         agregarMensaje(conv, "agente", msg, "confirmacion");
         return Map.of("mensajeAgente", msg, "estado", "CONFIRMANDO_POLITICA");
     }
 
-    // ─── Confirmacion final (arranca el tramite) ──────────────────────────────
+    // ─── Confirmacion final — mantenido por compatibilidad con conversaciones en curso ──
 
     private Map<String, Object> manejarConfirmacionFinal(ConversacionAgente conv, String mensaje) {
-        String msgLower = mensaje.toLowerCase().trim();
-        boolean confirmo = msgLower.matches(".*(s[ií]|dale|ok|confirmo|adelante|listo|procede).*");
-
-        if (!confirmo) {
-            conv.setEstado(EstadoConversacion.DETECTANDO_POLITICA);
-            conv.setPoliticaId(null);
-            String msg = "Tramite cancelado. Si necesitas algo mas, estoy aqui.";
-            agregarMensaje(conv, "agente", msg, "texto");
-            return Map.of("mensajeAgente", msg, "estado", "DETECTANDO_POLITICA");
-        }
-
-        try {
-            String politicaId = conv.getPoliticaId();
-            String empresaId = conv.getEmpresaId();
-            String clienteId = conv.getClienteId();
-            String nombreTramite = conv.getNombreTramitePropuesto();
-
-            Nodo nodoInicio = nodoRepository.findByPoliticaIdAndActivoTrue(politicaId).stream()
-                    .filter(n -> "INICIO".equals(n.getTipo()))
-                    .findFirst()
-                    .orElseThrow(() -> new RuntimeException("La politica no tiene nodo INICIO"));
-
-            Tramite tramite = Tramite.builder()
-                    .politicaId(politicaId)
-                    .empresaId(empresaId)
-                    .titulo(nombreTramite != null ? nombreTramite : "Tramite del cliente")
-                    .prioridad("MEDIA")
-                    .estadoGeneral("PENDIENTE")
-                    .iniciadoPor(clienteId)
-                    .clienteId(clienteId)
-                    .nodosParalelosPendientes(new ArrayList<>())
-                    .iteracionesPorNodo(new HashMap<>())
-                    .build();
-
-            Tramite tramiteCreado = motorWorkflowService.iniciarTramite(tramite, nodoInicio.getId());
-
-            conv.setTramiteId(tramiteCreado.getId());
-            conv.setNodoActualId(tramiteCreado.getNodoActualId());
-            conv.setEstado(EstadoConversacion.RECOPILANDO_DATOS_NODO);
-            conv.setDatosRecopilados(new HashMap<>());
-            conversacionRepository.save(conv);
-
-            return iniciarRecopilacionNodo(conv);
-
-        } catch (Exception e) {
-            log.error("Error iniciando tramite para cliente {}: {}", conv.getClienteId(), e.getMessage());
-            String msg = "Hubo un problema al iniciar tu tramite. Por favor intenta de nuevo.";
-            agregarMensaje(conv, "agente", msg, "error");
-            return Map.of("mensajeAgente", msg, "estado", conv.getEstado().name());
-        }
+        // Redirigir al flujo normal de confirmacion deterministica
+        // (para conversaciones que quedaron en CONFIRMACION_FINAL antes del cambio)
+        return manejarConfirmacionDeterministica(conv, mensaje);
     }
 
     // ─── Recopilacion de datos del nodo ──────────────────────────────────────
@@ -433,26 +442,67 @@ public class AgenteService {
         String pregunta = generarPreguntaCampo(campoActual);
         int total = camposCliente.size();
         int idx = camposCliente.indexOf(campoActual);
+
+        // Al llegar al primer campo, emitir badge de departamento antes de la pregunta
+        if (idx == 0) {
+            String nombreDepto = null;
+            Nodo nodoRef = nodoRepository.findById(nodoActualId).orElse(null);
+            if (nodoRef != null && nodoRef.getDepartamentoId() != null) {
+                nombreDepto = departamentoRepository.findById(nodoRef.getDepartamentoId())
+                        .map(Departamento::getNombre)
+                        .orElse(null);
+            }
+            if (nombreDepto == null && nodoRef != null) {
+                nombreDepto = nodoRef.getNombre();
+            }
+            if (nombreDepto != null) {
+                agregarMensaje(conv, "agente", nombreDepto, "DEPARTAMENTO");
+            }
+        }
+
         String preguntaConProgreso = "(" + (idx + 1) + "/" + total + ") " + pregunta;
 
         agregarMensaje(conv, "agente", preguntaConProgreso, "texto");
-        return Map.of("mensajeAgente", preguntaConProgreso, "estado", "RECOPILANDO_DATOS_NODO",
-                "campoActual", campoActual.getNombre());
+
+        Map<String, Object> campoMeta = new HashMap<>();
+        campoMeta.put("tipo", campoActual.getTipo() != null ? campoActual.getTipo() : "TEXTO");
+        campoMeta.put("etiqueta", campoActual.getEtiqueta() != null ? campoActual.getEtiqueta() : campoActual.getNombre());
+        campoMeta.put("opciones", campoActual.getOpciones() != null ? campoActual.getOpciones() : new ArrayList<>());
+        campoMeta.put("requerido", Boolean.TRUE.equals(campoActual.getRequerido()));
+
+        Map<String, Object> respuesta = new HashMap<>();
+        respuesta.put("mensajeAgente", preguntaConProgreso);
+        respuesta.put("estado", "RECOPILANDO_DATOS_NODO");
+        respuesta.put("campoActual", campoActual.getNombre());
+        respuesta.put("campoMeta", campoMeta);
+        return respuesta;
     }
 
     private boolean tieneFieldsCliente(Formulario form) {
         if (form.getCampos() == null) return false;
+        // null en llenadoPor se trata como FUNCIONARIO (convencion del seeder).
         return form.getCampos().stream().anyMatch(c ->
-                c.getLlenadoPor() == null || "CLIENTE".equals(c.getLlenadoPor().name()));
+                c.getLlenadoPor() != null && "CLIENTE".equals(c.getLlenadoPor().name()));
     }
 
+    /**
+     * Devuelve los campos que debe rellenar el CLIENTE, ordenados estrictamente
+     * por el campo "orden". Si no tienen orden asignado se usa la posicion en la lista.
+     */
     private List<Formulario.CampoFormulario> getCamposCliente(Formulario form) {
         if (form.getCampos() == null) return new ArrayList<>();
+        // null en llenadoPor se trata como FUNCIONARIO; solo CLIENTE explícito se incluye aquí.
         return form.getCampos().stream()
-                .filter(c -> c.getLlenadoPor() == null || "CLIENTE".equals(c.getLlenadoPor().name()))
+                .filter(c -> c.getLlenadoPor() != null && "CLIENTE".equals(c.getLlenadoPor().name()))
+                .sorted(Comparator.comparingInt((Formulario.CampoFormulario c) ->
+                        c.getOrden() != null ? c.getOrden() : 9999))
                 .collect(Collectors.toList());
     }
 
+    /**
+     * Devuelve el siguiente campo pendiente de rellenar, respetando el orden estricto.
+     * Un campo se considera pendiente si no aparece aun en datosRecopilados.
+     */
     private Formulario.CampoFormulario obtenerCampoActualPendiente(Formulario form, ConversacionAgente conv) {
         List<Formulario.CampoFormulario> camposCliente = getCamposCliente(form);
         Map<String, Object> datos = conv.getDatosRecopilados() != null
@@ -475,12 +525,12 @@ public class AgenteService {
 
         return switch (tipo) {
             case "TEXTO_CORTO", "TEXTO" ->
-                    "Por favor, escribe tu " + etiqueta.toLowerCase() + ":";
+                    "Por favor, escribe el " + etiqueta.toLowerCase() + ":";
             case "AREA_TEXTO", "TEXTAREA" ->
                     "Cuentame sobre " + etiqueta.toLowerCase() + " (puedes escribir todo lo que necesites):";
             case "ETIQUETA" -> null;
             case "NUMERO" ->
-                    "Cual es tu " + etiqueta.toLowerCase() + "? (solo el numero)";
+                    "Cual es el " + etiqueta.toLowerCase() + "? (solo el numero)";
             case "FECHA" ->
                     "Cual es la " + etiqueta.toLowerCase() + "? (formato DD/MM/AAAA)";
             case "SELECTOR", "SELECCION" -> {
@@ -512,7 +562,7 @@ public class AgenteService {
             case "TABLA_GRID", "GRID" ->
                     generarPreguntaTablaGrid(campo);
             default ->
-                    "Por favor, ingresa tu " + etiqueta.toLowerCase() + ":";
+                    "Por favor, ingresa el " + etiqueta.toLowerCase() + ":";
         };
     }
 
@@ -753,27 +803,42 @@ public class AgenteService {
                     conv.getDatosRecopilados() != null ? conv.getDatosRecopilados() : new HashMap<>()
             );
         } catch (Exception e) {
-            log.warn("clienteCompletadoNodo fallo (puede que no haya ejecucion en fase CLIENTE): {}", e.getMessage());
+            log.error("clienteCompletadoNodo fallo: {}. Intentando guardar respuestasCliente directamente.", e.getMessage());
+            try {
+                final Map<String, Object> datosFinal = conv.getDatosRecopilados() != null
+                        ? new HashMap<>(conv.getDatosRecopilados()) : new HashMap<>();
+                ejecucionNodoRepository.findByTramiteIdAndNodoId(conv.getTramiteId(), conv.getNodoActualId())
+                        .ifPresent(ej -> {
+                            ej.setRespuestasCliente(datosFinal);
+                            ej.setFase(FaseNodo.ESPERANDO_FUNCIONARIO);
+                            ej.setClienteCompletadoEn(java.time.LocalDateTime.now());
+                            // Actualizar estado para que aparezca en la vista del funcionario
+                            ej.setEstado("PENDIENTE");
+                            ejecucionNodoRepository.save(ej);
+                        });
+            } catch (Exception e2) {
+                log.error("Fallback tambien fallo al guardar respuestasCliente: {}", e2.getMessage());
+            }
         }
 
         conv.setEstado(EstadoConversacion.ESPERANDO_APROBACION);
         conv.setDatosRecopilados(new HashMap<>());
 
-        String departamento = "el equipo";
+        String departamento = null;
         if (conv.getNodoActualId() != null) {
             Nodo nodo = nodoRepository.findById(conv.getNodoActualId()).orElse(null);
             if (nodo != null && nodo.getDepartamentoId() != null) {
                 departamento = departamentoRepository.findById(nodo.getDepartamentoId())
                         .map(Departamento::getNombre)
-                        .orElse("el equipo");
+                        .orElse(null);
             }
         }
 
-        String msg = String.format(
-                "Listo! Toda tu informacion fue enviada correctamente.\n\n" +
-                "El equipo de %s esta revisando tu solicitud. Te notificaremos aqui en cuanto haya una respuesta.",
-                departamento);
-        agregarMensaje(conv, "agente", msg, "estado");
+        // Mensaje limpio: una sola linea sin redundancia (MEJORA 4 — Caso A)
+        String msg = departamento != null
+                ? "Tu solicitud esta siendo revisada por " + departamento + "."
+                : "Tu solicitud esta siendo revisada por nuestro equipo.";
+        agregarMensaje(conv, "agente", msg, "texto");
 
         if (conv.getClienteId() != null) {
             notificacionService.crearNotificacion(
@@ -806,22 +871,34 @@ public class AgenteService {
                  || EstadoConversacion.RECOPILANDO_DATOS_NODO.equals(conv.getEstado()))) {
 
             Optional<Formulario> formOpt = formularioRepository.findByNodoIdAndActivoTrue(conv.getNodoActualId());
-            formOpt.ifPresent(formulario -> {
+            if (formOpt.isPresent()) {
+                Formulario formulario = formOpt.get();
                 Formulario.CampoFormulario campo = obtenerCampoActualPendiente(formulario, conv);
                 if (campo != null) {
                     Map<String, Object> datos = conv.getDatosRecopilados() != null
                             ? new HashMap<>(conv.getDatosRecopilados()) : new HashMap<>();
                     datos.put(campo.getNombre(), archivoUrl);
                     conv.setDatosRecopilados(datos);
+                    // Avanzar exactamente un campo: ir directamente al siguiente sin pasar
+                    // por manejarRespuestaCampo (que volveria a leer el campo pendiente y
+                    // escribiria la URL del archivo en el campo siguiente — BUG 1).
+                    if (EstadoConversacion.ESPERANDO_ARCHIVOS.equals(conv.getEstado())) {
+                        conv.setEstado(EstadoConversacion.RECOPILANDO_DATOS_NODO);
+                    }
+                    conversacionRepository.save(conv);
+                    Map<String, Object> respuesta = iniciarRecopilacionNodo(conv);
+                    return guardarYRetornar(conv, respuesta);
                 }
-            });
+            }
         }
 
         if (EstadoConversacion.ESPERANDO_ARCHIVOS.equals(conv.getEstado())) {
             conv.setEstado(EstadoConversacion.RECOPILANDO_DATOS_NODO);
         }
 
-        Map<String, Object> respuesta = manejarRespuestaCampo(conv, "[archivo:" + nombreArchivo + "]");
+        // Fallback: sin nodo activo o sin campo pendiente — avanzar igual
+        conversacionRepository.save(conv);
+        Map<String, Object> respuesta = iniciarRecopilacionNodo(conv);
         return guardarYRetornar(conv, respuesta);
     }
 
@@ -852,55 +929,89 @@ public class AgenteService {
                     conv.setDatosRecopilados(new HashMap<>());
                     conv.setEstado(EstadoConversacion.RECOPILANDO_DATOS_NODO);
                     conv.setUltimaActividadEn(LocalDateTime.now());
-                    conversacionRepository.save(conv);
 
-                    String msgNotif = "Tu solicitud fue aprobada. Necesito algunos datos adicionales para continuar.";
-                    enviarNotificacionWsCliente(conv.getClienteId(), msgNotif);
+                    // MEJORA 4 — Caso B: no emitir mensajes intermedios redundantes.
+                    // iniciarRecopilacionNodo ya emitira el badge DEPARTAMENTO y la primera pregunta.
+                    Map<String, Object> resp = iniciarRecopilacionNodo(conv);
 
-                    // Iniciar recopilacion del nuevo nodo
-                    Optional<Formulario> formOpt = formularioRepository.findByNodoIdAndActivoTrue(nodoSiguienteId);
-                    if (formOpt.isPresent()) {
-                        Map<String, Object> resp = iniciarRecopilacionNodo(conv);
-                        guardarYRetornar(conv, resp);
+                    // Notificar via WS cada mensaje que se haya agregado al historial
+                    // (badge DEPARTAMENTO + primera pregunta)
+                    List<MensajeChat> msgs = conv.getMensajes();
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> campoMetaWs = (Map<String, Object>) resp.get("campoMeta");
+                    if (msgs != null && msgs.size() >= 2) {
+                        MensajeChat penultimo = msgs.get(msgs.size() - 2);
+                        MensajeChat ultimo    = msgs.get(msgs.size() - 1);
+                        if ("DEPARTAMENTO".equals(penultimo.getTipo())) {
+                            enviarNotificacionWsCliente(conv.getClienteId(), penultimo.getContenido(), "DEPARTAMENTO");
+                        }
+                        enviarNotificacionWsClienteConMeta(conv.getClienteId(), ultimo.getContenido(), ultimo.getTipo(), campoMetaWs);
+                    } else if (msgs != null && !msgs.isEmpty()) {
+                        MensajeChat ultimo = msgs.get(msgs.size() - 1);
+                        enviarNotificacionWsClienteConMeta(conv.getClienteId(), ultimo.getContenido(), ultimo.getTipo(), campoMetaWs);
                     }
+                    guardarYRetornar(conv, resp);
                 }
                 case "TRAMITE_EN_PROCESO" -> {
                     conv.setEstado(EstadoConversacion.TRAMITE_EN_PROCESO);
                     conv.setUltimaActividadEn(LocalDateTime.now());
 
-                    String depto = "el siguiente equipo";
+                    String depto = null;
+                    String nombreNodo = null;
                     if (nodoSiguienteId != null) {
                         Nodo nodo = nodoRepository.findById(nodoSiguienteId).orElse(null);
-                        if (nodo != null && nodo.getDepartamentoId() != null) {
-                            depto = departamentoRepository.findById(nodo.getDepartamentoId())
-                                    .map(Departamento::getNombre).orElse("el siguiente equipo");
+                        if (nodo != null) {
+                            nombreNodo = nodo.getNombre();
+                            if (nodo.getDepartamentoId() != null) {
+                                depto = departamentoRepository.findById(nodo.getDepartamentoId())
+                                        .map(Departamento::getNombre).orElse(null);
+                            }
                         }
                     }
-                    String msg = "Tu tramite continua en " + depto + ". Te avisaremos cuando haya novedades.";
-                    agregarMensaje(conv, "agente", msg, "estado");
+
+                    // MEJORA 4 — Caso C: mensaje limpio sin redundancia
+                    String msg;
+                    if (depto != null && nombreNodo != null) {
+                        msg = "Tu solicitud avanzó. Ahora está siendo procesada por " + depto + " — " + nombreNodo + ".";
+                    } else if (depto != null) {
+                        msg = "Tu solicitud avanzó. Ahora está siendo procesada por " + depto + ".";
+                    } else {
+                        msg = "Tu solicitud avanzó. El equipo continúa procesándola.";
+                    }
+                    agregarMensaje(conv, "agente", msg, "texto");
                     conversacionRepository.save(conv);
                     enviarNotificacionWsCliente(conv.getClienteId(), msg);
                 }
                 default -> {
                     // Fallback para compatibilidad con llamadas anteriores (decision = "APROBADO")
-                    String msg = "Tu solicitud fue aprobada en este paso. Continua al siguiente.";
                     conv.setEstado(EstadoConversacion.TRAMITE_EN_PROCESO);
                     if (nodoSiguienteId != null) conv.setNodoActualId(nodoSiguienteId);
                     conv.setUltimaActividadEn(LocalDateTime.now());
-                    agregarMensaje(conv, "agente", msg, "estado");
                     conversacionRepository.save(conv);
-                    enviarNotificacionWsCliente(conv.getClienteId(), msg);
                 }
             }
         });
     }
 
     private void enviarNotificacionWsCliente(String clienteId, String mensaje) {
+        enviarNotificacionWsCliente(clienteId, mensaje, "texto");
+    }
+
+    private void enviarNotificacionWsCliente(String clienteId, String mensaje, String tipoMensaje) {
+        enviarNotificacionWsClienteConMeta(clienteId, mensaje, tipoMensaje, null);
+    }
+
+    private void enviarNotificacionWsClienteConMeta(String clienteId, String mensaje, String tipoMensaje,
+                                                     Map<String, Object> campoMeta) {
         if (clienteId != null && !clienteId.isBlank()) {
             Map<String, Object> payload = new HashMap<>();
             payload.put("tipo", "MENSAJE_AGENTE");
             payload.put("mensaje", mensaje);
+            payload.put("tipoMensaje", tipoMensaje);
             payload.put("timestamp", LocalDateTime.now().toString());
+            if (campoMeta != null) {
+                payload.put("campoMeta", campoMeta);
+            }
             notificacionService.notificarUsuario(clienteId, payload);
         }
     }
@@ -983,12 +1094,66 @@ public class AgenteService {
     }
 
     private String obtenerMensajeEstadoActual(ConversacionAgente conv) {
-        if (conv.getTramiteId() != null) {
-            return tramiteRepository.findById(conv.getTramiteId())
-                    .map(t -> "Tu tramite '" + t.getTitulo() + "' esta en estado: " + t.getEstadoGeneral() + ".")
-                    .orElse("Tu tramite esta en proceso de revision.");
+        if (conv.getTramiteId() == null) {
+            return "Tu solicitud fue enviada y esta siendo revisada por nuestro equipo.";
         }
-        return "Tu solicitud fue enviada y esta siendo revisada por nuestro equipo.";
+
+        Tramite tramite = tramiteRepository.findById(conv.getTramiteId()).orElse(null);
+        if (tramite == null) {
+            return "Tu solicitud esta siendo procesada.";
+        }
+
+        String titulo = tramite.getTitulo() != null ? tramite.getTitulo() : "tu tramite";
+
+        // Obtener nodo actual y departamento
+        String nodoNombre = null;
+        String deptoNombre = null;
+        String funcionarioNombre = null;
+
+        String nodoId = tramite.getNodoActualId() != null ? tramite.getNodoActualId() : conv.getNodoActualId();
+        if (nodoId != null) {
+            Nodo nodo = nodoRepository.findById(nodoId).orElse(null);
+            if (nodo != null) {
+                nodoNombre = nodo.getNombre();
+                if (nodo.getDepartamentoId() != null) {
+                    deptoNombre = departamentoRepository.findById(nodo.getDepartamentoId())
+                            .map(Departamento::getNombre).orElse(null);
+                }
+            }
+
+            // Buscar la ejecucion activa para saber el funcionario asignado
+            EjecucionNodo ej = ejecucionNodoRepository
+                    .findFirstByTramiteIdAndEstadoOrderByCreadoEnDesc(conv.getTramiteId(), "PENDIENTE")
+                    .or(() -> ejecucionNodoRepository
+                            .findFirstByTramiteIdAndEstadoOrderByCreadoEnDesc(conv.getTramiteId(), "EN_PROCESO"))
+                    .orElse(null);
+            if (ej != null && ej.getFuncionarioId() != null) {
+                funcionarioNombre = usuarioRepository.findById(ej.getFuncionarioId())
+                        .map(u -> u.getNombre() != null ? u.getNombre() : null)
+                        .orElse(null);
+            }
+        }
+
+        String estado = tramite.getEstadoGeneral();
+        StringBuilder sb = new StringBuilder();
+        sb.append("Tu tramite '").append(titulo).append("' ");
+
+        switch (estado) {
+            case "PENDIENTE" -> sb.append("esta pendiente de revision.");
+            case "EN_PROCESO" -> {
+                sb.append("esta siendo procesado");
+                if (deptoNombre != null) sb.append(" por ").append(deptoNombre);
+                if (nodoNombre != null) sb.append(" — etapa: ").append(nodoNombre);
+                if (funcionarioNombre != null) sb.append(". Funcionario asignado: ").append(funcionarioNombre);
+                sb.append(". Te notificaremos cuando haya novedades.");
+            }
+            case "COMPLETADO" -> sb.append("fue completado exitosamente.");
+            case "RECHAZADO"  -> sb.append("fue rechazado. Contacta a CRE para mas informacion.");
+            case "BLOQUEADO"  -> sb.append("esta temporalmente bloqueado. El equipo de CRE lo revisara.");
+            default -> sb.append("estado: ").append(estado).append(".");
+        }
+
+        return sb.toString();
     }
 
     private Map<String, Object> respuestaError(ConversacionAgente conv, String mensaje) {
