@@ -5,6 +5,7 @@ import com.workflow.documento.dto.DocumentoResponse;
 import com.workflow.documento.model.*;
 import com.workflow.documento.repository.AuditoriaDocumentoRepository;
 import com.workflow.documento.repository.DocumentoRepository;
+import com.workflow.tramite.repository.TramiteRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -24,13 +25,32 @@ public class DocumentoService {
     private final DocumentoRepository documentoRepo;
     private final AuditoriaDocumentoRepository auditoriaRepo;
     private final S3Service s3Service;
+    private final TramiteRepository tramiteRepo;
 
     public DocumentoResponse subirDocumento(MultipartFile archivo, DocumentoRequest request,
                                              String usuarioId, String usuarioNombre) throws IOException {
-        String url = s3Service.subirArchivo(archivo, request.getEmpresaId(),
-                request.getPoliticaId(), request.getTramiteId(), "documentos");
-        String key = s3Service.construirKey(request.getEmpresaId(), request.getPoliticaId(),
-                request.getTramiteId(), "documentos", archivo.getOriginalFilename());
+        String carpeta = request.getCarpetaId() != null ? request.getCarpetaId() : "documentos";
+        
+        String clienteId = request.getClienteId();
+        if ((clienteId == null || clienteId.isBlank() || "general".equalsIgnoreCase(clienteId)) && request.getTramiteId() != null) {
+            clienteId = tramiteRepo.findById(request.getTramiteId())
+                .map(com.workflow.tramite.model.Tramite::getClienteId)
+                .orElse(null);
+        }
+
+        String tramiteOPoliticaId = request.getTramiteId();
+        if (tramiteOPoliticaId == null || tramiteOPoliticaId.isBlank() || "general".equalsIgnoreCase(tramiteOPoliticaId)) {
+            tramiteOPoliticaId = request.getPoliticaId();
+        }
+
+        String key = s3Service.construirKey(
+            request.getEmpresaId() != null ? request.getEmpresaId() : "general",
+            clienteId,
+            tramiteOPoliticaId,
+            carpeta,
+            archivo.getOriginalFilename()
+        );
+        String url = s3Service.subirArchivoConKey(archivo, key);
 
         VersionDocumento primeraVersion = VersionDocumento.builder()
             .version(1).urlArchivo(url).s3Key(key)
@@ -45,6 +65,7 @@ public class DocumentoService {
 
         Documento doc = Documento.builder()
             .empresaId(request.getEmpresaId())
+            .clienteId(clienteId)
             .nombre(request.getNombre() != null ? request.getNombre() : archivo.getOriginalFilename())
             .descripcion(request.getDescripcion()).tipoMime(archivo.getContentType())
             .urlArchivo(url).s3Key(key).tamanioBytes(archivo.getSize())
@@ -64,10 +85,26 @@ public class DocumentoService {
         Documento doc = documentoRepo.findById(documentoId)
             .orElseThrow(() -> new RuntimeException("Documento no encontrado: " + documentoId));
 
-        String url = s3Service.subirArchivo(archivo, doc.getEmpresaId(),
-                doc.getPoliticaId(), doc.getTramiteId(), "documentos");
-        String key = s3Service.construirKey(doc.getEmpresaId(), doc.getPoliticaId(),
-                doc.getTramiteId(), "documentos", archivo.getOriginalFilename());
+        String clienteId = doc.getClienteId();
+        if ((clienteId == null || clienteId.isBlank() || "general".equalsIgnoreCase(clienteId)) && doc.getTramiteId() != null) {
+            clienteId = tramiteRepo.findById(doc.getTramiteId())
+                .map(com.workflow.tramite.model.Tramite::getClienteId)
+                .orElse(null);
+        }
+
+        String tramiteOPoliticaId = doc.getTramiteId();
+        if (tramiteOPoliticaId == null || tramiteOPoliticaId.isBlank() || "general".equalsIgnoreCase(tramiteOPoliticaId)) {
+            tramiteOPoliticaId = doc.getPoliticaId();
+        }
+
+        String key = s3Service.construirKey(
+            doc.getEmpresaId() != null ? doc.getEmpresaId() : "general",
+            clienteId,
+            tramiteOPoliticaId,
+            "documentos",
+            archivo.getOriginalFilename()
+        );
+        String url = s3Service.subirArchivoConKey(archivo, key);
 
         int nuevaVersion = doc.getVersion() + 1;
         VersionDocumento version = VersionDocumento.builder()
@@ -91,8 +128,27 @@ public class DocumentoService {
         Documento doc = documentoRepo.findById(documentoId)
             .orElseThrow(() -> new RuntimeException("Documento no encontrado: " + documentoId));
 
-        String key = doc.getEmpresaId() + "/" + (doc.getPoliticaId() != null ? doc.getPoliticaId() : "libre")
-            + "/" + System.currentTimeMillis() + "_" + doc.getNombre();
+        String clienteId = doc.getClienteId();
+        if ((clienteId == null || clienteId.isBlank() || "general".equalsIgnoreCase(clienteId)) && doc.getTramiteId() != null) {
+            clienteId = tramiteRepo.findById(doc.getTramiteId())
+                .map(com.workflow.tramite.model.Tramite::getClienteId)
+                .orElse(null);
+        }
+
+        String tramiteOPoliticaId = doc.getTramiteId();
+        if (tramiteOPoliticaId == null || tramiteOPoliticaId.isBlank() || "general".equalsIgnoreCase(tramiteOPoliticaId)) {
+            tramiteOPoliticaId = doc.getPoliticaId();
+        }
+
+        String carpeta = doc.getCarpetaId() != null ? doc.getCarpetaId() : "documentos";
+
+        String key = s3Service.construirKey(
+            doc.getEmpresaId() != null ? doc.getEmpresaId() : "general",
+            clienteId,
+            tramiteOPoliticaId,
+            carpeta,
+            doc.getNombre()
+        );
         String url = s3Service.subirBytes(contenido, key, doc.getTipoMime());
 
         int nuevaVersion = doc.getVersion() + 1;
@@ -186,7 +242,7 @@ public class DocumentoService {
 
     private DocumentoResponse mapToResponse(Documento doc) {
         return DocumentoResponse.builder()
-            .id(doc.getId()).empresaId(doc.getEmpresaId()).nombre(doc.getNombre())
+            .id(doc.getId()).empresaId(doc.getEmpresaId()).clienteId(doc.getClienteId()).nombre(doc.getNombre())
             .descripcion(doc.getDescripcion()).tipoMime(doc.getTipoMime())
             .urlArchivo(doc.getUrlArchivo()).s3Key(doc.getS3Key()).tamanioBytes(doc.getTamanioBytes())
             .carpetaId(doc.getCarpetaId()).politicaId(doc.getPoliticaId()).tramiteId(doc.getTramiteId())

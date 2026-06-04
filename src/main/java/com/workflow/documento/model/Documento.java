@@ -18,6 +18,7 @@ import java.util.List;
 public class Documento {
     @Id private String id;
     private String empresaId;
+    private String clienteId;
     private String nombre;
     private String descripcion;
     private String tipoMime;

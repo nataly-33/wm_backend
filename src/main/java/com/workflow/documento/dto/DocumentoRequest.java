@@ -7,6 +7,7 @@ import java.util.List;
 @Data
 public class DocumentoRequest {
     private String empresaId;
+    private String clienteId;
     private String nombre;
     private String descripcion;
     private String carpetaId;
