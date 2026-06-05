@@ -197,10 +197,6 @@ public class S3Service {
         return generarUrlPresignada(key, 15);
     }
 
-    /**
-     * Lista todos los archivos de un trámite agrupados por departamento.
-     * Retorna: Map<nombreDepartamento, List<UrlArchivo>>
-     */
     public Map<String, List<String>> listarArchivosTramite(String empresaId,
                                                             String clienteId,
                                                             String tramiteId) {
@@ -209,9 +205,9 @@ public class S3Service {
             return new LinkedHashMap<>();
         }
 
-        String nombreCliente = resolverNombreCliente(clienteId, tramiteId);
-        String nombreTramite = resolverNombreTramite(tramiteId, null);
-        String prefijo = nombreCliente + "/" + nombreTramite + "/";
+        String cId = (clienteId != null && !clienteId.isBlank()) ? clienteId : "sin_cliente_id";
+        String tId = (tramiteId != null && !tramiteId.isBlank()) ? tramiteId : "sin_tramite_id";
+        String prefijo = cId + "/" + tId + "/";
 
         ListObjectsV2Request req = ListObjectsV2Request.builder()
             .bucket(bucket).prefix(prefijo).build();
@@ -220,7 +216,7 @@ public class S3Service {
 
         Map<String, List<String>> resultado = new LinkedHashMap<>();
         for (S3Object obj : resp.contents()) {
-            // key = nombreCliente/nombreTramite/nombreDepartamento/timestamp_archivo
+            // key = clienteId/tramiteId/departamentoId/timestamp_archivo
             String[] partes = obj.key().split("/");
             if (partes.length >= 4) {
                 String depto = partes[2];
@@ -241,16 +237,54 @@ public class S3Service {
     public String construirKey(String empresaId, String clienteId,
                                 String tramiteId, String departamento,
                                 String nombreArchivo) {
-        String nombreCliente = resolverNombreCliente(clienteId, tramiteId);
-        String nombreTramite = resolverNombreTramite(tramiteId, null);
-        String nombreDepto = resolverNombreDepartamento(departamento, tramiteId);
+                                
+        // 0. Limpiar valores inválidos desde el frontend
+        if ("undefined".equals(clienteId) || "null".equals(clienteId)) clienteId = null;
+        if ("undefined".equals(tramiteId) || "null".equals(tramiteId)) tramiteId = null;
+        if ("undefined".equals(departamento) || "null".equals(departamento)) departamento = null;
+        
+        // 1. Intentar recuperar tramiteId desde el clienteId si hay un trámite activo
+        if ((tramiteId == null || tramiteId.isBlank()) && clienteId != null && !clienteId.isBlank() && tramiteRepository != null) {
+            List<Tramite> tramitesCliente = tramiteRepository.findByClienteIdOrderByIniciadoEnDesc(clienteId);
+            Tramite activo = tramitesCliente.stream()
+                .filter(t -> "PENDIENTE".equals(t.getEstadoGeneral()) || "EN_PROCESO".equals(t.getEstadoGeneral()))
+                .findFirst().orElse(null);
+            if (activo != null) {
+                tramiteId = activo.getId();
+            }
+        }
+
+        // 2. Si ya tenemos tramiteId, intentar recuperar el resto del contexto (clienteId y departamento)
+        if (tramiteId != null && !tramiteId.isBlank() && tramiteRepository != null) {
+            Tramite tramite = tramiteRepository.findById(tramiteId).orElse(null);
+            if (tramite != null) {
+                // Recuperar clienteId si falta
+                if (clienteId == null || clienteId.isBlank() || "general".equalsIgnoreCase(clienteId)) {
+                    clienteId = tramite.getClienteId();
+                }
+                
+                // Recuperar departamento si falta o es genérico
+                boolean faltaDepto = departamento == null || departamento.isBlank() || "documentos".equals(departamento);
+                if (faltaDepto && tramite.getNodoActualId() != null && nodoRepository != null) {
+                    Nodo nodo = nodoRepository.findById(tramite.getNodoActualId()).orElse(null);
+                    if (nodo != null && nodo.getDepartamentoId() != null && departamentoRepository != null) {
+                        Departamento depto = departamentoRepository.findById(nodo.getDepartamentoId()).orElse(null);
+                        departamento = depto != null ? depto.getNombre() : nodo.getDepartamentoId();
+                    }
+                }
+            }
+        }
+
+        String cId = (clienteId != null && !clienteId.isBlank()) ? clienteId : "sin_cliente_id";
+        String tId = (tramiteId != null && !tramiteId.isBlank()) ? tramiteId : "sin_tramite_id";
+        String dId = (departamento != null && !departamento.isBlank()) ? departamento : "sin_departamento_id";
 
         String archivoSanitizado = nombreArchivo != null
             ? nombreArchivo.replaceAll("[^a-zA-Z0-9._\\-]", "_")
             : "archivo";
 
         return String.format("%s/%s/%s/%d_%s",
-            nombreCliente, nombreTramite, nombreDepto,
+            cId, tId, dId,
             System.currentTimeMillis(), archivoSanitizado);
     }
 
@@ -309,217 +343,4 @@ public class S3Service {
         }
     }
 
-    private String resolverNombreCliente(String clienteId, String tramiteId) {
-        String nombreCliente = null;
-
-        // 1. Si tenemos clienteId válido (no null, no vacío, no "general", no "documentos")
-        if (usuarioRepository != null && clienteId != null && !clienteId.isBlank()
-                && !"general".equalsIgnoreCase(clienteId) && !"documentos".equalsIgnoreCase(clienteId)) {
-            try {
-                nombreCliente = usuarioRepository.findById(clienteId)
-                    .map(u -> {
-                        String n = u.getNombre();
-                        return (n != null && !n.isBlank()) ? n : null;
-                    })
-                    .orElse(null);
-                if (nombreCliente != null) {
-                    log.debug("[S3] Cliente resuelto por ID {}: {}", clienteId, nombreCliente);
-                }
-            } catch (Exception e) {
-                log.warn("[S3] Error buscando cliente por ID {}: {}", clienteId, e.getMessage());
-            }
-        }
-
-        // 2. Si no se pudo obtener por clienteId, pero tenemos tramiteId → sacarlo del trámite
-        if ((nombreCliente == null || nombreCliente.isBlank())
-                && tramiteRepository != null && usuarioRepository != null
-                && tramiteId != null && !tramiteId.isBlank()
-                && !"general".equalsIgnoreCase(tramiteId) && !"documentos".equalsIgnoreCase(tramiteId)
-                && tramiteId.length() == 24) {
-            try {
-                Tramite tramite = tramiteRepository.findById(tramiteId).orElse(null);
-                if (tramite != null && tramite.getClienteId() != null && !tramite.getClienteId().isBlank()) {
-                    nombreCliente = usuarioRepository.findById(tramite.getClienteId())
-                        .map(u -> {
-                            String n = u.getNombre();
-                            return (n != null && !n.isBlank()) ? n : null;
-                        })
-                        .orElse(null);
-                    if (nombreCliente != null) {
-                        log.debug("[S3] Cliente resuelto desde tramite {}: {}", tramiteId, nombreCliente);
-                    }
-                }
-                // Si el trámite tiene iniciadoPor y no clienteId, usar ese
-                if ((nombreCliente == null || nombreCliente.isBlank())
-                        && tramite != null && tramite.getIniciadoPor() != null && !tramite.getIniciadoPor().isBlank()) {
-                    nombreCliente = usuarioRepository.findById(tramite.getIniciadoPor())
-                        .map(u -> {
-                            String n = u.getNombre();
-                            return (n != null && !n.isBlank()) ? n : null;
-                        })
-                        .orElse(null);
-                    if (nombreCliente != null) {
-                        log.debug("[S3] Cliente resuelto por iniciadoPor en tramite {}: {}", tramiteId, nombreCliente);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[S3] Error buscando cliente a partir de tramite ID {}: {}", tramiteId, e.getMessage());
-            }
-        }
-
-        // 3. Fallback: si el clienteId parece ser un nombre legible (no un ObjectId de 24 hex)
-        if ((nombreCliente == null || nombreCliente.isBlank())
-                && clienteId != null && !clienteId.isBlank()
-                && !"general".equalsIgnoreCase(clienteId) && !"documentos".equalsIgnoreCase(clienteId)
-                && clienteId.length() != 24) {
-            nombreCliente = clienteId; // ya es un nombre legible
-        }
-
-        return sanitizarComponenteRuta(nombreCliente, "cliente_sin_nombre");
-    }
-
-    private String resolverNombreTramite(String tramiteId, String politicaId) {
-        String nombreTramite = null;
-
-        // 1. Si tenemos tramiteId válido (ObjectId de 24 hex), buscamos en tramiteRepository
-        if (tramiteRepository != null && tramiteId != null && !tramiteId.isBlank()
-                && !"general".equalsIgnoreCase(tramiteId) && !"documentos".equalsIgnoreCase(tramiteId)
-                && tramiteId.length() == 24) {
-            try {
-                Tramite tramite = tramiteRepository.findById(tramiteId).orElse(null);
-                if (tramite != null) {
-                    // Primero intentar título del trámite
-                    String titulo = tramite.getTitulo();
-                    if (titulo != null && !titulo.isBlank()) {
-                        nombreTramite = titulo;
-                        log.debug("[S3] Nombre trámite resuelto por título: {}", nombreTramite);
-                    }
-                    // Si no hay título, buscar nombre de la política
-                    if ((nombreTramite == null || nombreTramite.isBlank())
-                            && politicaRepository != null && tramite.getPoliticaId() != null
-                            && !tramite.getPoliticaId().isBlank()) {
-                        nombreTramite = politicaRepository.findById(tramite.getPoliticaId())
-                            .map(Politica::getNombre)
-                            .orElse(null);
-                        if (nombreTramite != null) {
-                            log.debug("[S3] Nombre trámite resuelto por política {}: {}", tramite.getPoliticaId(), nombreTramite);
-                        }
-                    }
-                    // Último recurso: abreviación del ID del trámite
-                    if (nombreTramite == null || nombreTramite.isBlank()) {
-                        nombreTramite = "tramite_" + tramiteId.substring(0, Math.min(6, tramiteId.length()));
-                    }
-                } else if (politicaRepository != null) {
-                    // Puede ser un ID de política directamente
-                    nombreTramite = politicaRepository.findById(tramiteId)
-                        .map(Politica::getNombre)
-                        .orElse(null);
-                    if (nombreTramite != null) {
-                        log.debug("[S3] ID {} resuelto como política: {}", tramiteId, nombreTramite);
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[S3] Error buscando tramite/politica por ID {}: {}", tramiteId, e.getMessage());
-            }
-        }
-
-        // 2. Si no se pudo obtener por tramiteId, pero tenemos politicaId
-        if ((nombreTramite == null || nombreTramite.isBlank())
-                && politicaRepository != null && politicaId != null && !politicaId.isBlank()
-                && !"general".equalsIgnoreCase(politicaId) && !"documentos".equalsIgnoreCase(politicaId)
-                && politicaId.length() == 24) {
-            try {
-                nombreTramite = politicaRepository.findById(politicaId)
-                    .map(Politica::getNombre)
-                    .orElse(null);
-                if (nombreTramite != null) {
-                    log.debug("[S3] Nombre trámite resuelto por politicaId {}: {}", politicaId, nombreTramite);
-                }
-            } catch (Exception e) {
-                log.warn("[S3] Error buscando politica por ID {}: {}", politicaId, e.getMessage());
-            }
-        }
-
-        // 3. Fallback: si tramiteId parece ser un nombre legible (no ObjectId)
-        if ((nombreTramite == null || nombreTramite.isBlank())
-                && tramiteId != null && !tramiteId.isBlank()
-                && !"general".equalsIgnoreCase(tramiteId) && !"documentos".equalsIgnoreCase(tramiteId)
-                && tramiteId.length() != 24) {
-            nombreTramite = tramiteId; // ya es un nombre legible
-        }
-
-        return sanitizarComponenteRuta(nombreTramite, "tramite_sin_nombre");
-    }
-
-    private String resolverNombreDepartamento(String departamento, String tramiteId) {
-        String nombreDepto = null;
-
-        // 1. Si nos pasaron un departamento y parece ser un ObjectId (24 hex), buscarlo en BD
-        if (departamentoRepository != null && departamento != null && !departamento.isBlank()
-                && !"general".equalsIgnoreCase(departamento) && !"documentos".equalsIgnoreCase(departamento)
-                && departamento.length() == 24) {
-            try {
-                nombreDepto = departamentoRepository.findById(departamento)
-                    .map(Departamento::getNombre)
-                    .orElse(null);
-                if (nombreDepto != null) {
-                    log.debug("[S3] Departamento resuelto por ID {}: {}", departamento, nombreDepto);
-                }
-            } catch (Exception e) {
-                log.warn("[S3] Error buscando departamento por ID {}: {}", departamento, e.getMessage());
-            }
-        }
-
-        // 2. Si no se resolvió como ObjectId, pero el valor parece un nombre legible
-        // (no es null/vacío/general/documentos y no tiene 24 chars de hex)
-        if ((nombreDepto == null || nombreDepto.isBlank())
-                && departamento != null && !departamento.isBlank()
-                && !"general".equalsIgnoreCase(departamento) && !"documentos".equalsIgnoreCase(departamento)
-                && departamento.length() != 24) {
-            nombreDepto = departamento; // ya es un nombre legible
-            log.debug("[S3] Departamento tratado como nombre directo: {}", nombreDepto);
-        }
-
-        // 3. Si sigue sin resolverse y tenemos tramiteId, buscar el departamento del nodo actual
-        if ((nombreDepto == null || nombreDepto.isBlank())
-                && tramiteRepository != null && nodoRepository != null && departamentoRepository != null
-                && tramiteId != null && !tramiteId.isBlank()
-                && !"general".equalsIgnoreCase(tramiteId) && !"documentos".equalsIgnoreCase(tramiteId)
-                && tramiteId.length() == 24) {
-            try {
-                Tramite tramite = tramiteRepository.findById(tramiteId).orElse(null);
-                if (tramite != null && tramite.getNodoActualId() != null && !tramite.getNodoActualId().isBlank()) {
-                    Nodo nodo = nodoRepository.findById(tramite.getNodoActualId()).orElse(null);
-                    if (nodo != null && nodo.getDepartamentoId() != null && !nodo.getDepartamentoId().isBlank()) {
-                        nombreDepto = departamentoRepository.findById(nodo.getDepartamentoId())
-                            .map(Departamento::getNombre)
-                            .orElse(null);
-                        if (nombreDepto != null) {
-                            log.debug("[S3] Departamento resuelto por nodo actual del trámite {}: {}", tramiteId, nombreDepto);
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[S3] Error buscando departamento del nodo actual del tramite ID {}: {}", tramiteId, e.getMessage());
-            }
-        }
-
-        return sanitizarComponenteRuta(nombreDepto, "departamento_general");
-    }
-
-    private String sanitizarComponenteRuta(String input, String fallback) {
-        if (input == null || input.isBlank()) {
-            return fallback;
-        }
-        String limpio = input.trim();
-        // Evitar usar "general" o "documentos" como componente de ruta real
-        if ("general".equalsIgnoreCase(limpio) || "documentos".equalsIgnoreCase(limpio)) {
-            return fallback;
-        }
-        return limpio
-            .replace("/", "-")       // No queremos barras diagonales intermedias
-            .replace("\\", "-")      // No queremos barras invertidas
-            .replaceAll("[*?:\"<>|]", "") // Quitar caracteres prohibidos en sistemas de archivos comunes
-            .trim();
-    }
 }

@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.workflow.usuario.repository.UsuarioRepository;
 
 import java.io.IOException;
 import java.util.List;
@@ -28,6 +29,10 @@ public class DocumentoController {
     private final DocumentoRepository documentoRepo;
     private final DocumentoTramiteRepository documentoTramiteRepo;
     private final S3Service s3Service;
+    private final UsuarioRepository usuarioRepository;
+
+    @org.springframework.beans.factory.annotation.Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key}")
+    private String onlyofficeJwtSecret;
 
     // ── Documentos (colección principal) ────────────────────────────────────
 
@@ -86,7 +91,20 @@ public class DocumentoController {
             @RequestParam(defaultValue = "view") String modo,
             java.security.Principal principal) {
         String userId = principal.getName();
-        return ResponseEntity.ok(documentoService.generarConfigOnlyOffice(id, userId, userId, modo));
+        String userName = usuarioRepository.findById(userId)
+            .map(u -> {
+                String n = u.getNombre() != null ? u.getNombre() : "";
+                return n.isBlank() ? userId : n;
+            }).orElse(userId);
+        return ResponseEntity.ok(documentoService.generarConfigOnlyOffice(id, userId, userName, modo));
+    }
+    
+    @DeleteMapping("/api/v1/documentos/{id}")
+    public ResponseEntity<Void> eliminarDocumento(
+            @PathVariable String id,
+            java.security.Principal principal) {
+        documentoService.eliminarDocumento(id, principal.getName());
+        return ResponseEntity.noContent().build();
     }
 
     // ── Repositorio de archivos de trámite ───────────────────────────────────
@@ -172,7 +190,7 @@ public class DocumentoController {
             return ResponseEntity.ok(docOpt.get());
         }
         // Si no está en Documento, buscar en DocumentoTramite usando query indexada (no findAll)
-        return documentoTramiteRepo.findByUrlS3(url)
+        Optional<?> dtOpt = documentoTramiteRepo.findByUrlS3(url)
             .map(dt -> {
                 String key = dt.getS3Key() != null && !dt.getS3Key().isBlank()
                     ? dt.getS3Key()
@@ -181,16 +199,43 @@ public class DocumentoController {
                 String ext = dt.getNombreArchivo() != null && dt.getNombreArchivo().contains(".")
                     ? dt.getNombreArchivo().substring(dt.getNombreArchivo().lastIndexOf('.') + 1).toLowerCase()
                     : "docx";
-                return ResponseEntity.ok((Object) Map.of(
+                return (Object) Map.of(
                     "id", dt.getId(),
                     "nombre", dt.getNombreArchivo() != null ? dt.getNombreArchivo() : "documento",
                     "tipoDocumento", ext,
                     "esDocumentoOficina", false,
                     "urlPresignada", presignedUrl,
                     "esTramite", true
-                ));
-            })
-            .orElse(ResponseEntity.notFound().build());
+                );
+            });
+            
+        if (dtOpt.isPresent()) {
+            return ResponseEntity.ok(dtOpt.get());
+        }
+
+        // Fallback: si no está en BD pero es una URL de S3 (como archivos de respuestas)
+        String key = s3Service.extraerKeyDeUrl(url);
+        if (key != null && !key.isBlank()) {
+            String presignedUrl = s3Service.generarUrlPresignada(key, 1440);
+            String nombreArchivo = key.contains("/") ? key.substring(key.lastIndexOf('/') + 1) : key;
+            if (nombreArchivo.matches("\\d+_.+")) {
+                nombreArchivo = nombreArchivo.replaceFirst("^\\d+_", "");
+            }
+            String ext = nombreArchivo.contains(".")
+                ? nombreArchivo.substring(nombreArchivo.lastIndexOf('.') + 1).toLowerCase()
+                : "docx";
+            String base64Key = java.util.Base64.getUrlEncoder().encodeToString(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return ResponseEntity.ok(Map.of(
+                "id", "s3_dyn_" + base64Key,
+                "nombre", nombreArchivo,
+                "tipoDocumento", ext,
+                "esDocumentoOficina", false,
+                "urlPresignada", presignedUrl,
+                "esTramite", true
+            ));
+        }
+
+        return ResponseEntity.notFound().build();
     }
 
     /**
@@ -229,21 +274,44 @@ public class DocumentoController {
         // Buscar en DocumentoTramite para obtener metadatos adicionales si está disponible
         String docId = documentoTramiteRepo.findByUrlS3(url)
             .map(dt -> dt.getId())
-            .orElse("tramite_" + System.currentTimeMillis());
+            .orElseGet(() -> "s3_dyn_" + java.util.Base64.getUrlEncoder().encodeToString(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        
+        String callbackUrl = documentoService.getOnlyofficeCallbackUrl() + docId;
         Map<String, Object> config = new java.util.HashMap<>();
         config.put("scriptUrl", documentoService.getOnlyofficeScriptUrl());
         config.put("documentType", docType);
         config.put("document", Map.of(
             "fileType", ext,
-            "key",      docId + "_" + System.currentTimeMillis(),
+            "key",      docId,
             "title",    nombreArchivo,
             "url",      presignedUrl
         ));
+        String userName = usuarioRepository.findById(userId)
+            .map(u -> {
+                String n = u.getNombre() != null ? u.getNombre() : "";
+                return n.isBlank() ? userId : n;
+            }).orElse(userId);
+        
         config.put("editorConfig", Map.of(
+            "callbackUrl", callbackUrl,
             "mode", modo,
-            "user", Map.of("id", userId, "name", userId),
-            "lang", "es"
+            "user", Map.of("id", userId, "name", userName),
+            "lang", "es",
+            "coEditing", Map.of("mode", "fast", "change", true)
         ));
+
+        if (onlyofficeJwtSecret != null && !onlyofficeJwtSecret.isBlank()) {
+            try {
+                String token = io.jsonwebtoken.Jwts.builder()
+                        .setClaims(config)
+                        .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(onlyofficeJwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                        .compact();
+                config.put("token", token);
+            } catch (Exception e) {
+                // Loguear el error silenciosamente
+            }
+        }
+
         return ResponseEntity.ok(config);
     }
 

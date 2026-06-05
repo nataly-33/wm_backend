@@ -34,12 +34,24 @@ public class DocumentoService {
     private final AuditoriaDocumentoRepository auditoriaRepo;
     private final S3Service s3Service;
     private final TramiteRepository tramiteRepo;
+    private final com.workflow.documento.repository.DocumentoTramiteRepository documentoTramiteRepo;
 
     @Value("${onlyoffice.server.url:http://localhost:8088}")
     private String onlyofficeServerUrl;
 
     @Value("${onlyoffice.callback.url:http://localhost:8080/api/v1/onlyoffice/callback/}")
     private String onlyofficeCallbackUrl;
+
+    @Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key}")
+    private String onlyofficeJwtSecret;
+
+    public String getOnlyofficeScriptUrl() {
+        return onlyofficeServerUrl + "/web-apps/apps/api/documents/api.js";
+    }
+
+    public String getOnlyofficeCallbackUrl() {
+        return onlyofficeCallbackUrl;
+    }
 
     public DocumentoResponse subirDocumento(MultipartFile archivo, DocumentoRequest request,
                                              String usuarioId, String usuarioNombre) throws IOException {
@@ -139,6 +151,23 @@ public class DocumentoService {
     }
 
     public void guardarVersionDesdeBytes(String documentoId, byte[] contenido, String actor) {
+        if (documentoId.startsWith("s3_dyn_")) {
+            String base64Key = documentoId.substring(7);
+            String key = new String(java.util.Base64.getUrlDecoder().decode(base64Key));
+            s3Service.subirBytes(contenido, key, "application/octet-stream");
+            log.info("[Callback] Actualizado archivo raw en S3: {}", key);
+            return;
+        }
+
+        Optional<DocumentoTramite> dtOpt = documentoTramiteRepo.findById(documentoId);
+        if (dtOpt.isPresent()) {
+            DocumentoTramite dt = dtOpt.get();
+            String key = dt.getS3Key() != null ? dt.getS3Key() : s3Service.extraerKeyDeUrl(dt.getUrlS3());
+            s3Service.subirBytes(contenido, key, "application/octet-stream");
+            log.info("[Callback] Actualizado DocumentoTramite en S3: {}", dt.getId());
+            return;
+        }
+
         Documento doc = documentoRepo.findById(documentoId)
             .orElseThrow(() -> new RuntimeException("Documento no encontrado: " + documentoId));
 
@@ -213,6 +242,16 @@ public class DocumentoService {
         return mapToResponse(actualizado);
     }
 
+    public void eliminarDocumento(String documentoId, String usuarioId) {
+        Documento doc = documentoRepo.findById(documentoId)
+            .orElseThrow(() -> new RuntimeException("Documento no encontrado: " + documentoId));
+        if (doc.getS3Key() != null && !doc.getS3Key().isBlank()) {
+            s3Service.eliminarArchivo(doc.getS3Key());
+        }
+        documentoRepo.deleteById(documentoId);
+        registrarAuditoria(documentoId, usuarioId, "", "ELIMINADO", "Documento eliminado por el administrador");
+    }
+
     public Map<String, Object> generarConfigOnlyOffice(String documentoId, String usuarioId,
                                                         String usuarioNombre, String modo) {
         Documento doc = documentoRepo.findById(documentoId)
@@ -237,8 +276,22 @@ public class DocumentoService {
             "callbackUrl", callbackUrl,
             "mode", modo,
             "user", Map.of("id", usuarioId, "name", usuarioNombre),
-            "lang", "es"
+            "lang", "es",
+            "coEditing", Map.of("mode", "fast", "change", true)
         ));
+
+        if (onlyofficeJwtSecret != null && !onlyofficeJwtSecret.isBlank()) {
+            try {
+                String token = io.jsonwebtoken.Jwts.builder()
+                        .setClaims(config)
+                        .signWith(io.jsonwebtoken.security.Keys.hmacShaKeyFor(onlyofficeJwtSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                        .compact();
+                config.put("token", token);
+            } catch (Exception e) {
+                log.error("Error generando JWT para OnlyOffice", e);
+            }
+        }
+
         return config;
     }
 
@@ -286,10 +339,6 @@ public class DocumentoService {
         return documentoRepo.findByUrlArchivoAndEliminadoFalse(url);
     }
 
-    /** Retorna la URL completa del script api.js de OnlyOffice (para incluir en configs externas). */
-    public String getOnlyofficeScriptUrl() {
-        return onlyofficeServerUrl + "/web-apps/apps/api/documents/api.js";
-    }
 
     private byte[] generarArchivoVacio(String tipo) throws IOException {
         return switch (tipo.toLowerCase()) {
