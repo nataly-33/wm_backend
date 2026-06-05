@@ -15,6 +15,7 @@ import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.nodo.model.Nodo;
 import com.workflow.nodo.repository.NodoRepository;
 import com.workflow.notificacion.service.NotificacionService;
+import com.workflow.notificacion.service.PushNotificacionService;
 import com.workflow.politica.model.Politica;
 import com.workflow.politica.repository.PoliticaRepository;
 import com.workflow.tramite.model.Tramite;
@@ -45,6 +46,7 @@ public class AgenteService {
     private final FormularioRepository formularioRepository;
     private final DepartamentoRepository departamentoRepository;
     private final NotificacionService notificacionService;
+    private final PushNotificacionService pushNotificacionService;
     private final UsuarioRepository usuarioRepository;
     private final MotorWorkflowService motorWorkflowService;
     private final EjecucionNodoRepository ejecucionNodoRepository;
@@ -914,7 +916,8 @@ public class AgenteService {
                     String msg = "Tu solicitud fue rechazada. Puedes ver los detalles en tu historial o iniciar un nuevo tramite.";
                     agregarMensaje(conv, "agente", msg, "estado");
                     conversacionRepository.save(conv);
-                    enviarNotificacionWsCliente(conv.getClienteId(), msg);
+                    enviarNotificacionWsCliente(conv, msg);
+                    enviarPushCliente(conv.getClienteId(), "Tramite rechazado", msg, "TRAMITE_RECHAZADO");
                 }
                 case "COMPLETADO" -> {
                     conv.setEstado(EstadoConversacion.COMPLETADO);
@@ -922,7 +925,8 @@ public class AgenteService {
                     String msg = "Tu tramite fue completado exitosamente! Puedes ver el resumen en 'Mis Tramites'.";
                     agregarMensaje(conv, "agente", msg, "estado");
                     conversacionRepository.save(conv);
-                    enviarNotificacionWsCliente(conv.getClienteId(), msg);
+                    enviarNotificacionWsCliente(conv, msg);
+                    enviarPushCliente(conv.getClienteId(), "Tramite completado", msg, "TRAMITE_COMPLETADO");
                 }
                 case "APROBADO_SIGUIENTE_NODO" -> {
                     conv.setNodoActualId(nodoSiguienteId);
@@ -943,14 +947,15 @@ public class AgenteService {
                         MensajeChat penultimo = msgs.get(msgs.size() - 2);
                         MensajeChat ultimo    = msgs.get(msgs.size() - 1);
                         if ("DEPARTAMENTO".equals(penultimo.getTipo())) {
-                            enviarNotificacionWsCliente(conv.getClienteId(), penultimo.getContenido(), "DEPARTAMENTO");
+                            enviarNotificacionWsCliente(conv, penultimo.getContenido(), "DEPARTAMENTO");
                         }
-                        enviarNotificacionWsClienteConMeta(conv.getClienteId(), ultimo.getContenido(), ultimo.getTipo(), campoMetaWs);
+                        enviarNotificacionWsClienteConMeta(conv, ultimo.getContenido(), ultimo.getTipo(), campoMetaWs);
                     } else if (msgs != null && !msgs.isEmpty()) {
                         MensajeChat ultimo = msgs.get(msgs.size() - 1);
-                        enviarNotificacionWsClienteConMeta(conv.getClienteId(), ultimo.getContenido(), ultimo.getTipo(), campoMetaWs);
+                        enviarNotificacionWsClienteConMeta(conv, ultimo.getContenido(), ultimo.getTipo(), campoMetaWs);
                     }
                     guardarYRetornar(conv, resp);
+                    enviarPushCliente(conv.getClienteId(), "Tramite en proceso", "Tu solicitud fue aprobada y avanza al siguiente paso.", "TRAMITE_AVANZADO");
                 }
                 case "TRAMITE_EN_PROCESO" -> {
                     conv.setEstado(EstadoConversacion.TRAMITE_EN_PROCESO);
@@ -980,7 +985,8 @@ public class AgenteService {
                     }
                     agregarMensaje(conv, "agente", msg, "texto");
                     conversacionRepository.save(conv);
-                    enviarNotificacionWsCliente(conv.getClienteId(), msg);
+                    enviarNotificacionWsCliente(conv, msg);
+                    enviarPushCliente(conv.getClienteId(), "Tu tramite avanza", msg, "TRAMITE_AVANZADO");
                 }
                 default -> {
                     // Fallback para compatibilidad con llamadas anteriores (decision = "APROBADO")
@@ -993,17 +999,17 @@ public class AgenteService {
         });
     }
 
-    private void enviarNotificacionWsCliente(String clienteId, String mensaje) {
-        enviarNotificacionWsCliente(clienteId, mensaje, "texto");
+    private void enviarNotificacionWsCliente(ConversacionAgente conv, String mensaje) {
+        enviarNotificacionWsCliente(conv, mensaje, "texto");
     }
 
-    private void enviarNotificacionWsCliente(String clienteId, String mensaje, String tipoMensaje) {
-        enviarNotificacionWsClienteConMeta(clienteId, mensaje, tipoMensaje, null);
+    private void enviarNotificacionWsCliente(ConversacionAgente conv, String mensaje, String tipoMensaje) {
+        enviarNotificacionWsClienteConMeta(conv, mensaje, tipoMensaje, null);
     }
 
-    private void enviarNotificacionWsClienteConMeta(String clienteId, String mensaje, String tipoMensaje,
+    private void enviarNotificacionWsClienteConMeta(ConversacionAgente conv, String mensaje, String tipoMensaje,
                                                      Map<String, Object> campoMeta) {
-        if (clienteId != null && !clienteId.isBlank()) {
+        if (conv.getClienteId() != null && !conv.getClienteId().isBlank()) {
             Map<String, Object> payload = new HashMap<>();
             payload.put("tipo", "MENSAJE_AGENTE");
             payload.put("mensaje", mensaje);
@@ -1012,7 +1018,10 @@ public class AgenteService {
             if (campoMeta != null) {
                 payload.put("campoMeta", campoMeta);
             }
-            notificacionService.notificarUsuario(clienteId, payload);
+            if (conv.getEstado() != null) {
+                payload.put("estadoConversacion", conv.getEstado().name());
+            }
+            notificacionService.notificarUsuario(conv.getClienteId(), payload);
         }
     }
 
@@ -1161,6 +1170,7 @@ public class AgenteService {
         return Map.of("mensajeAgente", mensaje, "estado", conv.getEstado().name());
     }
 
+
     private Map<String, Object> guardarYRetornar(ConversacionAgente conv, Map<String, Object> respuesta) {
         conversacionRepository.save(conv);
         Map<String, Object> resultado = new HashMap<>(respuesta);
@@ -1168,4 +1178,25 @@ public class AgenteService {
         resultado.put("estadoConversacion", conv.getEstado().name());
         return resultado;
     }
+
+    // Enviar notificacion push FCM al cliente
+    private void enviarPushCliente(String clienteId, String titulo, String cuerpo, String tipo) {
+        if (clienteId == null || clienteId.isBlank()) return;
+        try {
+            usuarioRepository.findById(clienteId).ifPresent(usuario -> {
+                String fcmToken = usuario.getFcmToken();
+                if (fcmToken != null && !fcmToken.isBlank()) {
+                    Map<String, String> data = new java.util.HashMap<>();
+                    data.put("tipo", tipo);
+                    data.put("titulo", titulo);
+                    data.put("body", cuerpo);
+                    pushNotificacionService.enviarPush(fcmToken, titulo, cuerpo, data);
+                    log.info("Push enviado al cliente {} tipo={}", clienteId, tipo);
+                }
+            });
+        } catch (Exception e) {
+            log.warn("No se pudo enviar push al cliente {}: {}", clienteId, e.getMessage());
+        }
+    }
 }
+
