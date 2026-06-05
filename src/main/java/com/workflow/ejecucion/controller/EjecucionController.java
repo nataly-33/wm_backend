@@ -12,6 +12,8 @@ import com.workflow.formulario.model.LlenadoPor;
 import com.workflow.formulario.repository.FormularioRepository;
 import com.workflow.ejecucion.repository.EjecucionNodoRepository;
 import com.workflow.tramite.service.MotorWorkflowService;
+import com.workflow.tramite.repository.TramiteRepository;
+import com.workflow.tramite.model.Tramite;
 import com.workflow.usuario.repository.UsuarioRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +33,7 @@ public class EjecucionController {
     private final EjecucionNodoRepository ejecucionNodoRepository;
     private final FormularioRepository formularioRepository;
     private final UsuarioRepository usuarioRepository;
+    private final TramiteRepository tramiteRepository;
 
     @GetMapping("/departamento/{departamentoId}")
     public ResponseEntity<?> listarPorDepartamento(@PathVariable String departamentoId) {
@@ -183,8 +186,16 @@ public class EjecucionController {
                             .filter(c -> c.getLlenadoPor() == null || c.getLlenadoPor() == LlenadoPor.FUNCIONARIO)
                             .toList();
 
+            Tramite tramite = ejec.getTramiteId() != null 
+                    ? tramiteRepository.findById(ejec.getTramiteId()).orElse(null) 
+                    : null;
+
             VistaFuncionarioResponse vista = VistaFuncionarioResponse.builder()
                     .ejecucionId(id)
+                    .tramiteId(ejec.getTramiteId())
+                    .departamentoId(ejec.getDepartamentoId())
+                    .clienteId(tramite != null ? tramite.getClienteId() : null)
+                    .empresaId(tramite != null ? tramite.getEmpresaId() : null)
                     .fase(ejec.getFase() != null ? ejec.getFase().toString() : null)
                     .camposCliente(camposCliente)
                     .camposFuncionario(camposFuncionario)

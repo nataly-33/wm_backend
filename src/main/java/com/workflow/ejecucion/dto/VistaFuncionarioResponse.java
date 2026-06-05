@@ -14,6 +14,10 @@ import java.util.List;
 @AllArgsConstructor
 public class VistaFuncionarioResponse {
     private String ejecucionId;
+    private String tramiteId;
+    private String departamentoId;
+    private String clienteId;
+    private String empresaId;
     private String fase;
     private List<CampoConValor> camposCliente;
     private List<CampoFormulario> camposFuncionario;
