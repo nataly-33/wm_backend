@@ -5,6 +5,8 @@ target/generated-sources/
 target/generated-test-sources/
 target/maven-status/
 target/maven-archiver/
+target/surefire-reports/
+
 
 !target/workflow-back-0.0.1-SNAPSHOT.jar 
 .mvn/wrapper/maven-wrapper.jar
@@ -70,3 +72,4 @@ postman
 .postman/
 
 uploads/
+

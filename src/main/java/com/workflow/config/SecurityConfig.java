@@ -54,6 +54,8 @@ public class SecurityConfig {
                         .requestMatchers("/ws", "/ws/**").permitAll()
                         .requestMatchers("/ws-native", "/ws-native/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // OnlyOffice callback — Docker no envía JWT, debe ser público
+                        .requestMatchers(HttpMethod.POST, "/api/v1/onlyoffice/callback/**").permitAll()
                         // Resto protegido
                         .anyRequest().authenticated()
                 )
