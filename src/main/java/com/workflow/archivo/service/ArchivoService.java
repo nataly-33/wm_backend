@@ -52,13 +52,10 @@ public class ArchivoService {
         }
 
         // 1. Si S3 esta configurado, subir alli (prioridad maxima)
+        // IMPORTANTE: se pasan los valores SIN convertirlos a "general" para que
+        // S3Service pueda resolver los nombres reales desde MongoDB.
         if (s3Service != null && s3Service.isS3Disponible()) {
-            String empId = (empresaId != null && !empresaId.isBlank()) ? empresaId : "general";
-            String clId = (clienteId != null && !clienteId.isBlank()) ? clienteId : "general";
-            String tramId = (tramiteId != null && !tramiteId.isBlank()) ? tramiteId : "general";
-            String depto = (nombreDepartamento != null && !nombreDepartamento.isBlank()) ? nombreDepartamento : "general";
-
-            String key = s3Service.construirKey(empId, clId, tramId, depto, nombreOriginal);
+            String key = s3Service.construirKey(empresaId, clienteId, tramiteId, nombreDepartamento, nombreOriginal);
             String url = s3Service.subirArchivoConKey(archivo, key);
             log.info("Archivo subido a S3: {} ({} bytes)", key, archivo.getSize());
             return url;
