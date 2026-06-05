@@ -39,4 +39,7 @@ public class Documento {
     private LocalDateTime modificadoEn;
     @Builder.Default
     private boolean eliminado = false;
+    @Builder.Default
+    private boolean esDocumentoOficina = false;
+    private String tipoDocumento;
 }

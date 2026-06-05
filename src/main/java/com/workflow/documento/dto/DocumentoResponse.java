@@ -30,4 +30,6 @@ public class DocumentoResponse {
     private String creadoPorNombre;
     private LocalDateTime creadoEn;
     private LocalDateTime modificadoEn;
+    private boolean esDocumentoOficina;
+    private String tipoDocumento;
 }

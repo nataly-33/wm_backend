@@ -259,157 +259,264 @@ public class S3Service {
     }
 
     /**
-     * Extrae la key de S3 a partir de una URL pública.
-     * Usado para eliminar o re-firmar archivos existentes.
+     * Extrae la key de S3 a partir de cualquier formato de URL de S3.
+     * Soporta:
+     *  - https://{bucket}.s3.amazonaws.com/{key}
+     *  - https://{bucket}.s3.{region}.amazonaws.com/{key}
+     *  - https://s3.amazonaws.com/{bucket}/{key}
+     *  - URLs presignadas (con parámetros ?X-Amz-...) — extrae solo la key
      */
     public String extraerKeyDeUrl(String url) {
-        return url.replace("https://" + bucket + ".s3.amazonaws.com/", "");
+        if (url == null || url.isBlank()) return "";
+        try {
+            // 1. Quitar query string (parámetros de firma X-Amz-*)
+            String urlBase = url.contains("?") ? url.substring(0, url.indexOf('?')) : url;
+
+            // 2. Formato virtual-hosted: https://{bucket}.s3.amazonaws.com/{key}
+            //    o regional: https://{bucket}.s3.{region}.amazonaws.com/{key}
+            String bucketPrefix = bucket + ".s3.";
+            if (urlBase.contains(bucketPrefix)) {
+                int idxBucket = urlBase.indexOf(bucketPrefix);
+                String afterBucket = urlBase.substring(idxBucket + bucketPrefix.length());
+                // afterBucket = "amazonaws.com/{key}" o "{region}.amazonaws.com/{key}"
+                int dotAmazon = afterBucket.indexOf(".amazonaws.com");
+                if (dotAmazon >= 0) {
+                    String afterHost = afterBucket.substring(dotAmazon + ".amazonaws.com".length());
+                    if (afterHost.startsWith("/")) afterHost = afterHost.substring(1);
+                    if (!afterHost.isBlank()) return afterHost;
+                }
+            }
+
+            // 3. Formato path-style: https://s3.amazonaws.com/{bucket}/{key}
+            String pathStylePrefix = "s3.amazonaws.com/" + bucket + "/";
+            if (urlBase.contains(pathStylePrefix)) {
+                return urlBase.substring(urlBase.indexOf(pathStylePrefix) + pathStylePrefix.length());
+            }
+
+            // 4. Fallback: extraer path de la URI y quitar el bucket si aparece al inicio
+            java.net.URI uri = new java.net.URI(urlBase);
+            String path = uri.getPath();
+            if (path != null && path.startsWith("/")) path = path.substring(1);
+            if (path != null && path.startsWith(bucket + "/")) {
+                path = path.substring(bucket.length() + 1);
+            }
+            return path != null ? path : "";
+        } catch (Exception e) {
+            log.warn("extraerKeyDeUrl: no se pudo parsear la URL '{}': {}", url, e.getMessage());
+            // Último recurso: reemplazado simple
+            return url.replace("https://" + bucket + ".s3.amazonaws.com/", "")
+                      .replaceAll("\\?.*$", ""); // quitar query string si existe
+        }
     }
 
     private String resolverNombreCliente(String clienteId, String tramiteId) {
         String nombreCliente = null;
 
-        // 1. Si tenemos clienteId
-        if (usuarioRepository != null && clienteId != null && !clienteId.isBlank() && !"general".equalsIgnoreCase(clienteId)) {
+        // 1. Si tenemos clienteId válido (no null, no vacío, no "general", no "documentos")
+        if (usuarioRepository != null && clienteId != null && !clienteId.isBlank()
+                && !"general".equalsIgnoreCase(clienteId) && !"documentos".equalsIgnoreCase(clienteId)) {
             try {
                 nombreCliente = usuarioRepository.findById(clienteId)
-                    .map(Usuario::getNombre)
+                    .map(u -> {
+                        String n = u.getNombre();
+                        return (n != null && !n.isBlank()) ? n : null;
+                    })
                     .orElse(null);
-            } catch (Exception e) {
-                log.error("Error buscando cliente por ID {}: {}", clienteId, e.getMessage());
-            }
-        }
-
-        // 2. Si no se pudo obtener, pero tenemos tramiteId
-        if ((nombreCliente == null || nombreCliente.isBlank() || "general".equalsIgnoreCase(nombreCliente))
-                && tramiteRepository != null && usuarioRepository != null
-                && tramiteId != null && !tramiteId.isBlank() && !"general".equalsIgnoreCase(tramiteId)) {
-            try {
-                Tramite tramite = tramiteRepository.findById(tramiteId).orElse(null);
-                if (tramite != null && tramite.getClienteId() != null) {
-                    nombreCliente = usuarioRepository.findById(tramite.getClienteId())
-                        .map(Usuario::getNombre)
-                        .orElse(null);
+                if (nombreCliente != null) {
+                    log.debug("[S3] Cliente resuelto por ID {}: {}", clienteId, nombreCliente);
                 }
             } catch (Exception e) {
-                log.error("Error buscando cliente a partir de tramite ID {}: {}", tramiteId, e.getMessage());
+                log.warn("[S3] Error buscando cliente por ID {}: {}", clienteId, e.getMessage());
             }
         }
 
-        // 3. Fallback: si no es nulo pero no existe en BD, tal vez ya sea el nombre
-        if (nombreCliente == null || nombreCliente.isBlank() || "general".equalsIgnoreCase(nombreCliente)) {
-            if (clienteId != null && !clienteId.isBlank() && !"general".equalsIgnoreCase(clienteId) && clienteId.length() != 24) {
-                nombreCliente = clienteId;
+        // 2. Si no se pudo obtener por clienteId, pero tenemos tramiteId → sacarlo del trámite
+        if ((nombreCliente == null || nombreCliente.isBlank())
+                && tramiteRepository != null && usuarioRepository != null
+                && tramiteId != null && !tramiteId.isBlank()
+                && !"general".equalsIgnoreCase(tramiteId) && !"documentos".equalsIgnoreCase(tramiteId)
+                && tramiteId.length() == 24) {
+            try {
+                Tramite tramite = tramiteRepository.findById(tramiteId).orElse(null);
+                if (tramite != null && tramite.getClienteId() != null && !tramite.getClienteId().isBlank()) {
+                    nombreCliente = usuarioRepository.findById(tramite.getClienteId())
+                        .map(u -> {
+                            String n = u.getNombre();
+                            return (n != null && !n.isBlank()) ? n : null;
+                        })
+                        .orElse(null);
+                    if (nombreCliente != null) {
+                        log.debug("[S3] Cliente resuelto desde tramite {}: {}", tramiteId, nombreCliente);
+                    }
+                }
+                // Si el trámite tiene iniciadoPor y no clienteId, usar ese
+                if ((nombreCliente == null || nombreCliente.isBlank())
+                        && tramite != null && tramite.getIniciadoPor() != null && !tramite.getIniciadoPor().isBlank()) {
+                    nombreCliente = usuarioRepository.findById(tramite.getIniciadoPor())
+                        .map(u -> {
+                            String n = u.getNombre();
+                            return (n != null && !n.isBlank()) ? n : null;
+                        })
+                        .orElse(null);
+                    if (nombreCliente != null) {
+                        log.debug("[S3] Cliente resuelto por iniciadoPor en tramite {}: {}", tramiteId, nombreCliente);
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[S3] Error buscando cliente a partir de tramite ID {}: {}", tramiteId, e.getMessage());
             }
         }
 
-        return sanitizarComponenteRuta(nombreCliente, "cliente_desconocido");
+        // 3. Fallback: si el clienteId parece ser un nombre legible (no un ObjectId de 24 hex)
+        if ((nombreCliente == null || nombreCliente.isBlank())
+                && clienteId != null && !clienteId.isBlank()
+                && !"general".equalsIgnoreCase(clienteId) && !"documentos".equalsIgnoreCase(clienteId)
+                && clienteId.length() != 24) {
+            nombreCliente = clienteId; // ya es un nombre legible
+        }
+
+        return sanitizarComponenteRuta(nombreCliente, "cliente_sin_nombre");
     }
 
     private String resolverNombreTramite(String tramiteId, String politicaId) {
         String nombreTramite = null;
 
-        // 1. Si tenemos tramiteId, buscamos en tramiteRepository
-        if (tramiteRepository != null && tramiteId != null && !tramiteId.isBlank() && !"general".equalsIgnoreCase(tramiteId)) {
+        // 1. Si tenemos tramiteId válido (ObjectId de 24 hex), buscamos en tramiteRepository
+        if (tramiteRepository != null && tramiteId != null && !tramiteId.isBlank()
+                && !"general".equalsIgnoreCase(tramiteId) && !"documentos".equalsIgnoreCase(tramiteId)
+                && tramiteId.length() == 24) {
             try {
                 Tramite tramite = tramiteRepository.findById(tramiteId).orElse(null);
                 if (tramite != null) {
-                    nombreTramite = tramite.getTitulo();
-                    if ((nombreTramite == null || nombreTramite.isBlank()) && politicaRepository != null && tramite.getPoliticaId() != null) {
+                    // Primero intentar título del trámite
+                    String titulo = tramite.getTitulo();
+                    if (titulo != null && !titulo.isBlank()) {
+                        nombreTramite = titulo;
+                        log.debug("[S3] Nombre trámite resuelto por título: {}", nombreTramite);
+                    }
+                    // Si no hay título, buscar nombre de la política
+                    if ((nombreTramite == null || nombreTramite.isBlank())
+                            && politicaRepository != null && tramite.getPoliticaId() != null
+                            && !tramite.getPoliticaId().isBlank()) {
                         nombreTramite = politicaRepository.findById(tramite.getPoliticaId())
                             .map(Politica::getNombre)
                             .orElse(null);
+                        if (nombreTramite != null) {
+                            log.debug("[S3] Nombre trámite resuelto por política {}: {}", tramite.getPoliticaId(), nombreTramite);
+                        }
+                    }
+                    // Último recurso: abreviación del ID del trámite
+                    if (nombreTramite == null || nombreTramite.isBlank()) {
+                        nombreTramite = "tramite_" + tramiteId.substring(0, Math.min(6, tramiteId.length()));
                     }
                 } else if (politicaRepository != null) {
-                    // Si no existe como tramite, podria ser un ID de politica
+                    // Puede ser un ID de política directamente
                     nombreTramite = politicaRepository.findById(tramiteId)
                         .map(Politica::getNombre)
                         .orElse(null);
+                    if (nombreTramite != null) {
+                        log.debug("[S3] ID {} resuelto como política: {}", tramiteId, nombreTramite);
+                    }
                 }
             } catch (Exception e) {
-                log.error("Error buscando tramite o politica por ID {}: {}", tramiteId, e.getMessage());
+                log.warn("[S3] Error buscando tramite/politica por ID {}: {}", tramiteId, e.getMessage());
             }
         }
 
-        // 2. Si no se pudo obtener, pero tenemos politicaId
-        if ((nombreTramite == null || nombreTramite.isBlank() || "general".equalsIgnoreCase(nombreTramite))
-                && politicaRepository != null && politicaId != null && !politicaId.isBlank() && !"general".equalsIgnoreCase(politicaId)) {
+        // 2. Si no se pudo obtener por tramiteId, pero tenemos politicaId
+        if ((nombreTramite == null || nombreTramite.isBlank())
+                && politicaRepository != null && politicaId != null && !politicaId.isBlank()
+                && !"general".equalsIgnoreCase(politicaId) && !"documentos".equalsIgnoreCase(politicaId)
+                && politicaId.length() == 24) {
             try {
                 nombreTramite = politicaRepository.findById(politicaId)
                     .map(Politica::getNombre)
                     .orElse(null);
+                if (nombreTramite != null) {
+                    log.debug("[S3] Nombre trámite resuelto por politicaId {}: {}", politicaId, nombreTramite);
+                }
             } catch (Exception e) {
-                log.error("Error buscando politica por ID {}: {}", politicaId, e.getMessage());
+                log.warn("[S3] Error buscando politica por ID {}: {}", politicaId, e.getMessage());
             }
         }
 
-        // 3. Fallback: si no es nulo y no se encontro, tal vez ya sea el nombre
-        if (nombreTramite == null || nombreTramite.isBlank() || "general".equalsIgnoreCase(nombreTramite)) {
-            if (tramiteId != null && !tramiteId.isBlank() && !"general".equalsIgnoreCase(tramiteId) && tramiteId.length() != 24) {
-                nombreTramite = tramiteId;
-            }
+        // 3. Fallback: si tramiteId parece ser un nombre legible (no ObjectId)
+        if ((nombreTramite == null || nombreTramite.isBlank())
+                && tramiteId != null && !tramiteId.isBlank()
+                && !"general".equalsIgnoreCase(tramiteId) && !"documentos".equalsIgnoreCase(tramiteId)
+                && tramiteId.length() != 24) {
+            nombreTramite = tramiteId; // ya es un nombre legible
         }
 
-        return sanitizarComponenteRuta(nombreTramite, "tramite_desconocido");
+        return sanitizarComponenteRuta(nombreTramite, "tramite_sin_nombre");
     }
 
     private String resolverNombreDepartamento(String departamento, String tramiteId) {
         String nombreDepto = null;
 
-        // 1. Si nos pasaron un departamento/carpeta, intentamos ver si existe como ID en la BD
+        // 1. Si nos pasaron un departamento y parece ser un ObjectId (24 hex), buscarlo en BD
         if (departamentoRepository != null && departamento != null && !departamento.isBlank()
-                && !"general".equalsIgnoreCase(departamento) && !"documentos".equalsIgnoreCase(departamento)) {
+                && !"general".equalsIgnoreCase(departamento) && !"documentos".equalsIgnoreCase(departamento)
+                && departamento.length() == 24) {
             try {
                 nombreDepto = departamentoRepository.findById(departamento)
                     .map(Departamento::getNombre)
                     .orElse(null);
+                if (nombreDepto != null) {
+                    log.debug("[S3] Departamento resuelto por ID {}: {}", departamento, nombreDepto);
+                }
             } catch (Exception e) {
-                log.error("Error buscando departamento por ID {}: {}", departamento, e.getMessage());
+                log.warn("[S3] Error buscando departamento por ID {}: {}", departamento, e.getMessage());
             }
         }
 
-        // 2. Si no se resolvio como ID de departamento, pero no es nulo/vacio/general/documentos,
-        // lo tratamos como el nombre directo del departamento.
-        if ((nombreDepto == null || nombreDepto.isBlank()) && departamento != null && !departamento.isBlank()
-                && !"general".equalsIgnoreCase(departamento) && !"documentos".equalsIgnoreCase(departamento)) {
-            nombreDepto = departamento;
+        // 2. Si no se resolvió como ObjectId, pero el valor parece un nombre legible
+        // (no es null/vacío/general/documentos y no tiene 24 chars de hex)
+        if ((nombreDepto == null || nombreDepto.isBlank())
+                && departamento != null && !departamento.isBlank()
+                && !"general".equalsIgnoreCase(departamento) && !"documentos".equalsIgnoreCase(departamento)
+                && departamento.length() != 24) {
+            nombreDepto = departamento; // ya es un nombre legible
+            log.debug("[S3] Departamento tratado como nombre directo: {}", nombreDepto);
         }
 
-        // 3. Si sigue siendo nulo/vacio/general/documentos y tenemos tramiteId,
-        // buscamos el departamento del nodo actual del tramite
-        if ((nombreDepto == null || nombreDepto.isBlank() || "general".equalsIgnoreCase(nombreDepto) || "documentos".equalsIgnoreCase(nombreDepto))
+        // 3. Si sigue sin resolverse y tenemos tramiteId, buscar el departamento del nodo actual
+        if ((nombreDepto == null || nombreDepto.isBlank())
                 && tramiteRepository != null && nodoRepository != null && departamentoRepository != null
-                && tramiteId != null && !tramiteId.isBlank() && !"general".equalsIgnoreCase(tramiteId)) {
+                && tramiteId != null && !tramiteId.isBlank()
+                && !"general".equalsIgnoreCase(tramiteId) && !"documentos".equalsIgnoreCase(tramiteId)
+                && tramiteId.length() == 24) {
             try {
                 Tramite tramite = tramiteRepository.findById(tramiteId).orElse(null);
-                if (tramite != null && tramite.getNodoActualId() != null) {
+                if (tramite != null && tramite.getNodoActualId() != null && !tramite.getNodoActualId().isBlank()) {
                     Nodo nodo = nodoRepository.findById(tramite.getNodoActualId()).orElse(null);
-                    if (nodo != null && nodo.getDepartamentoId() != null) {
+                    if (nodo != null && nodo.getDepartamentoId() != null && !nodo.getDepartamentoId().isBlank()) {
                         nombreDepto = departamentoRepository.findById(nodo.getDepartamentoId())
                             .map(Departamento::getNombre)
                             .orElse(null);
+                        if (nombreDepto != null) {
+                            log.debug("[S3] Departamento resuelto por nodo actual del trámite {}: {}", tramiteId, nombreDepto);
+                        }
                     }
                 }
             } catch (Exception e) {
-                log.error("Error buscando departamento del nodo actual del tramite ID {}: {}", tramiteId, e.getMessage());
+                log.warn("[S3] Error buscando departamento del nodo actual del tramite ID {}: {}", tramiteId, e.getMessage());
             }
         }
 
-        // 4. Si no pudimos resolverlo pero el departamento original no estaba vacio (por ej: "documentos"),
-        // lo conservamos en lugar de poner "sin_departamento"
-        if ((nombreDepto == null || nombreDepto.isBlank() || "general".equalsIgnoreCase(nombreDepto))
-                && departamento != null && !departamento.isBlank() && !"general".equalsIgnoreCase(departamento)) {
-            nombreDepto = departamento;
-        }
-
-        return sanitizarComponenteRuta(nombreDepto, "sin_departamento");
+        return sanitizarComponenteRuta(nombreDepto, "departamento_general");
     }
 
     private String sanitizarComponenteRuta(String input, String fallback) {
-        if (input == null || input.isBlank() || "general".equalsIgnoreCase(input.trim())) {
+        if (input == null || input.isBlank()) {
             return fallback;
         }
-        return input.trim()
+        String limpio = input.trim();
+        // Evitar usar "general" o "documentos" como componente de ruta real
+        if ("general".equalsIgnoreCase(limpio) || "documentos".equalsIgnoreCase(limpio)) {
+            return fallback;
+        }
+        return limpio
             .replace("/", "-")       // No queremos barras diagonales intermedias
             .replace("\\", "-")      // No queremos barras invertidas
             .replaceAll("[*?:\"<>|]", "") // Quitar caracteres prohibidos en sistemas de archivos comunes

@@ -8,14 +8,22 @@ import com.workflow.documento.repository.DocumentoRepository;
 import com.workflow.tramite.repository.TramiteRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xslf.usermodel.XMLSlideShow;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -26,6 +34,12 @@ public class DocumentoService {
     private final AuditoriaDocumentoRepository auditoriaRepo;
     private final S3Service s3Service;
     private final TramiteRepository tramiteRepo;
+
+    @Value("${onlyoffice.server.url:http://localhost:8088}")
+    private String onlyofficeServerUrl;
+
+    @Value("${onlyoffice.callback.url:http://localhost:8080/api/v1/onlyoffice/callback/}")
+    private String onlyofficeCallbackUrl;
 
     public DocumentoResponse subirDocumento(MultipartFile archivo, DocumentoRequest request,
                                              String usuarioId, String usuarioNombre) throws IOException {
@@ -180,6 +194,11 @@ public class DocumentoService {
         return docs.stream().map(this::mapToResponse).toList();
     }
 
+    public List<DocumentoResponse> listarDocsOficina() {
+        return documentoRepo.findByEsDocumentoOficinaAndEliminadoFalse(true)
+            .stream().map(this::mapToResponse).toList();
+    }
+
     public List<AuditoriaDocumento> obtenerAuditoria(String documentoId) {
         return auditoriaRepo.findByDocumentoIdOrderByFechaHoraDesc(documentoId);
     }
@@ -199,37 +218,144 @@ public class DocumentoService {
         Documento doc = documentoRepo.findById(documentoId)
             .orElseThrow(() -> new RuntimeException("Documento no encontrado: " + documentoId));
 
-        String backendUrl = System.getenv().getOrDefault("BACKEND_URL", "http://localhost:8080");
-        String callbackUrl = backendUrl + "/api/v1/onlyoffice/callback/" + documentoId;
+        String callbackUrl = onlyofficeCallbackUrl + documentoId;
+        String scriptUrl = onlyofficeServerUrl + "/web-apps/apps/api/documents/api.js";
 
-        return Map.of(
-            "documentType", detectarTipoDoc(doc.getTipoMime()),
-            "document", Map.of(
-                "fileType", extraerExtension(doc.getNombre()),
-                "key", documentoId + "_v" + doc.getVersion(),
-                "title", doc.getNombre(),
-                "url", doc.getUrlArchivo()
-            ),
-            "editorConfig", Map.of(
-                "callbackUrl", callbackUrl,
-                "mode", modo,
-                "user", Map.of("id", usuarioId, "name", usuarioNombre),
-                "lang", "es"
-            )
-        );
+        Map<String, Object> config = new HashMap<>();
+        config.put("scriptUrl", scriptUrl);
+        config.put("documentType", detectarTipoDoc(doc.getTipoMime(), doc.getTipoDocumento()));
+        String s3KeyForUrl = doc.getS3Key() != null ? doc.getS3Key() : s3Service.extraerKeyDeUrl(doc.getUrlArchivo());
+        String presignedUrl = s3Service.generarUrlPresignada(s3KeyForUrl, 1440);
+
+        config.put("document", Map.of(
+            "fileType", extraerExtension(doc.getNombre(), doc.getTipoDocumento()),
+            "key", documentoId + "_v" + doc.getVersion(),
+            "title", doc.getNombre(),
+            "url", presignedUrl
+        ));
+        config.put("editorConfig", Map.of(
+            "callbackUrl", callbackUrl,
+            "mode", modo,
+            "user", Map.of("id", usuarioId, "name", usuarioNombre),
+            "lang", "es"
+        ));
+        return config;
     }
 
-    private String detectarTipoDoc(String mime) {
+    public Documento crearDocumentoOficina(String nombre, String tipo, String usuarioId) throws IOException {
+        byte[] contenido = generarArchivoVacio(tipo);
+        String mimeType = resolverMime(tipo);
+        String nombreArchivo = nombre.endsWith("." + tipo) ? nombre : nombre + "." + tipo;
+        long timestamp = System.currentTimeMillis();
+        String key = "documentos_oficina/" + timestamp + "_" + nombreArchivo;
+
+        String url = s3Service.subirBytes(contenido, key, mimeType);
+
+        VersionDocumento primeraVersion = VersionDocumento.builder()
+            .version(1).urlArchivo(url).s3Key(key)
+            .fechaSubida(LocalDateTime.now()).subidoPorId(usuarioId).subidoPorNombre(usuarioId)
+            .tamanioBytes((long) contenido.length).build();
+
+        PermisosDocumento permisos = new PermisosDocumento(
+            List.of("ADMIN_GENERAL", "TODOS"), List.of("ADMIN_GENERAL"), List.of("ADMIN_GENERAL"));
+
+        Documento doc = Documento.builder()
+            .empresaId("general")
+            .nombre(nombreArchivo)
+            .tipoMime(mimeType)
+            .urlArchivo(url)
+            .s3Key(key)
+            .tamanioBytes((long) contenido.length)
+            .version(1)
+            .historialVersiones(new ArrayList<>(List.of(primeraVersion)))
+            .permisos(permisos)
+            .creadoPorId(usuarioId)
+            .creadoPorNombre(usuarioId)
+            .creadoEn(LocalDateTime.now())
+            .modificadoEn(LocalDateTime.now())
+            .esDocumentoOficina(true)
+            .tipoDocumento(tipo)
+            .build();
+
+        Documento guardado = documentoRepo.save(doc);
+        registrarAuditoria(guardado.getId(), usuarioId, usuarioId, "CREADO", "Documento de oficina creado: " + tipo);
+        return guardado;
+    }
+
+    public Optional<Documento> buscarPorUrl(String url) {
+        return documentoRepo.findByUrlArchivoAndEliminadoFalse(url);
+    }
+
+    /** Retorna la URL completa del script api.js de OnlyOffice (para incluir en configs externas). */
+    public String getOnlyofficeScriptUrl() {
+        return onlyofficeServerUrl + "/web-apps/apps/api/documents/api.js";
+    }
+
+    private byte[] generarArchivoVacio(String tipo) throws IOException {
+        return switch (tipo.toLowerCase()) {
+            case "docx" -> {
+                try (XWPFDocument doc = new XWPFDocument();
+                     ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    doc.write(out);
+                    yield out.toByteArray();
+                }
+            }
+            case "xlsx" -> {
+                try (Workbook wb = new XSSFWorkbook();
+                     ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    wb.createSheet("Hoja1");
+                    wb.write(out);
+                    yield out.toByteArray();
+                }
+            }
+            case "pptx" -> {
+                try (XMLSlideShow ppt = new XMLSlideShow();
+                     ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+                    ppt.write(out);
+                    yield out.toByteArray();
+                }
+            }
+            default -> new byte[0];
+        };
+    }
+
+    private String resolverMime(String tipo) {
+        return switch (tipo.toLowerCase()) {
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "odt"  -> "application/vnd.oasis.opendocument.text";
+            case "ods"  -> "application/vnd.oasis.opendocument.spreadsheet";
+            case "odp"  -> "application/vnd.oasis.opendocument.presentation";
+            case "csv"  -> "text/csv";
+            case "txt"  -> "text/plain";
+            default     -> "application/octet-stream";
+        };
+    }
+
+    private String detectarTipoDoc(String mime, String tipoDocumento) {
+        // Si el tipo de documento está guardado explícitamente, usarlo primero
+        if (tipoDocumento != null) {
+            return switch (tipoDocumento.toLowerCase()) {
+                case "xlsx", "xls", "ods", "ots", "csv" -> "cell";
+                case "pptx", "ppt", "odp", "otp"        -> "slide";
+                default                                  -> "word";
+            };
+        }
         if (mime == null) return "word";
         return switch (mime) {
             case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                 "application/vnd.ms-excel" -> "cell";
-            case "application/vnd.openxmlformats-officedocument.presentationml.presentation" -> "slide";
+                 "application/vnd.ms-excel",
+                 "text/csv",
+                 "application/vnd.oasis.opendocument.spreadsheet" -> "cell";
+            case "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                 "application/vnd.oasis.opendocument.presentation" -> "slide";
             default -> "word";
         };
     }
 
-    private String extraerExtension(String nombre) {
+    private String extraerExtension(String nombre, String tipoDocumento) {
+        if (tipoDocumento != null && !tipoDocumento.isBlank()) return tipoDocumento.toLowerCase();
         if (nombre == null || !nombre.contains(".")) return "docx";
         return nombre.substring(nombre.lastIndexOf('.') + 1).toLowerCase();
     }
@@ -249,6 +375,9 @@ public class DocumentoService {
             .etiquetas(doc.getEtiquetas()).version(doc.getVersion())
             .historialVersiones(doc.getHistorialVersiones()).permisos(doc.getPermisos())
             .creadoPorId(doc.getCreadoPorId()).creadoPorNombre(doc.getCreadoPorNombre())
-            .creadoEn(doc.getCreadoEn()).modificadoEn(doc.getModificadoEn()).build();
+            .creadoEn(doc.getCreadoEn()).modificadoEn(doc.getModificadoEn())
+            .esDocumentoOficina(doc.isEsDocumentoOficina())
+            .tipoDocumento(doc.getTipoDocumento())
+            .build();
     }
 }
