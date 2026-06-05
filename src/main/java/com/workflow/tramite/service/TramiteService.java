@@ -176,7 +176,15 @@ public class TramiteService {
 
     public List<TramiteDetalladoResponse> listarTramitesEmpresaEnriquecidos(String empresaId) {
         List<Tramite> tramites = tramiteRepository.findByEmpresaId(empresaId);
+        return enriquecerTramites(tramites);
+    }
 
+    public List<TramiteDetalladoResponse> listarTramitesClienteEnriquecidos(String clienteId) {
+        List<Tramite> tramites = tramiteRepository.findByClienteId(clienteId);
+        return enriquecerTramites(tramites);
+    }
+
+    private List<TramiteDetalladoResponse> enriquecerTramites(List<Tramite> tramites) {
         Map<String, String> cachePolitica = new HashMap<>();
         Map<String, String> cacheDepto = new HashMap<>();
         Map<String, String> cacheUser = new HashMap<>();

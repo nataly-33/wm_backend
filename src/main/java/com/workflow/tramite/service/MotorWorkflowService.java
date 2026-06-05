@@ -150,11 +150,14 @@ public class MotorWorkflowService {
         tramite.setFinalizadoEn(LocalDateTime.now());
         tramiteRepository.save(tramite);
 
-        // Notificar al cliente via agente conversacional
+        // Notificar al cliente via agente conversacional y Push
         try {
-            agenteService.notificarClienteDecision(tramite.getId(), "RECHAZADO", null);
+            if (tramite.getClienteId() != null) {
+                agenteService.notificarClienteDecision(tramite.getId(), "RECHAZADO", null);
+            }
+            notificarPushCliente(tramite, "Trámite rechazado", "Tu trámite '" + tramite.getTitulo() + "' ha sido rechazado.", "RECHAZADO");
         } catch (Exception e) {
-            log.warn("No se pudo notificar al cliente via agente: {}", e.getMessage());
+            log.warn("No se pudo notificar al cliente via agente/push: {}", e.getMessage());
         }
 
         notificarAdminsGenerales(
@@ -519,15 +522,16 @@ public class MotorWorkflowService {
                 tramite.getPoliticaId(), tramite.getId(), nodoAnteriorId, nodoActualId);
         notificacionService.notificarCambioMonitor(tramite.getPoliticaId(), evento);
 
-        // Notificar al cliente via agente conversacional
-        if (tramite.getClienteId() != null) {
-            try {
+        // Notificar al cliente via agente conversacional y Push
+        try {
+            if (tramite.getClienteId() != null) {
                 // Determinar si el siguiente nodo requiere datos del cliente
                 String decisionAgente = determinarDecisionAgente(tramite, nodoActualId);
                 agenteService.notificarClienteDecision(tramite.getId(), decisionAgente, nodoActualId);
-            } catch (Exception e) {
-                log.warn("No se pudo notificar al cliente del avance de nodo: {}", e.getMessage());
             }
+            notificarPushCliente(tramite, "Avance en tu trámite", "Tu trámite '" + tramite.getTitulo() + "' ha avanzado de etapa.", "AVANCE");
+        } catch (Exception e) {
+            log.warn("No se pudo notificar al cliente del avance de nodo: {}", e.getMessage());
         }
     }
 
@@ -555,11 +559,14 @@ public class MotorWorkflowService {
         tramite.setFinalizadoEn(LocalDateTime.now());
         tramiteRepository.save(tramite);
 
-        // Notificar al cliente via agente conversacional
+        // Notificar al cliente via agente conversacional y Push
         try {
-            agenteService.notificarClienteDecision(tramite.getId(), "COMPLETADO", null);
+            if (tramite.getClienteId() != null) {
+                agenteService.notificarClienteDecision(tramite.getId(), "COMPLETADO", null);
+            }
+            notificarPushCliente(tramite, "Trámite completado", "Tu trámite '" + tramite.getTitulo() + "' ha sido completado con Éxito.", "COMPLETADO");
         } catch (Exception e) {
-            log.warn("No se pudo notificar al cliente via agente (completado): {}", e.getMessage());
+            log.warn("No se pudo notificar al cliente via agente/push (completado): {}", e.getMessage());
         }
 
         notificacionService.crearNotificacion(
@@ -717,7 +724,10 @@ public class MotorWorkflowService {
             tramiteRepository.save(tramite);
 
             try {
-                agenteService.notificarClienteDecision(ejecucion.getTramiteId(), "RECHAZADO", null);
+                if (ejecucion.getTramiteId() != null && tramite.getClienteId() != null) {
+                    agenteService.notificarClienteDecision(ejecucion.getTramiteId(), "RECHAZADO", null);
+                }
+                notificarPushCliente(tramite, "Trámite rechazado", "Tu trámite '" + tramite.getTitulo() + "' ha sido rechazado.", "RECHAZADO");
             } catch (Exception e) {
                 log.warn("No se pudo notificar al cliente del rechazo: {}", e.getMessage());
             }
@@ -767,6 +777,21 @@ public class MotorWorkflowService {
                 .findFirst()
                 .map(String::valueOf)
                 .orElse("");
+    }
+
+    private void notificarPushCliente(Tramite tramite, String titulo, String cuerpo, String tipo) {
+        if (tramite.getIniciadoPor() != null) {
+            usuarioRepository.findById(tramite.getIniciadoPor()).ifPresent(cliente -> {
+                if (cliente.getFcmToken() != null && !cliente.getFcmToken().isBlank()) {
+                    pushNotificacionService.enviarPush(
+                            cliente.getFcmToken(),
+                            titulo,
+                            cuerpo,
+                            Map.of("tipo", tipo, "tramiteId", tramite.getId())
+                    );
+                }
+            });
+        }
     }
 
     private record AsignacionUsuario(String funcionarioId, String estado) {

@@ -42,6 +42,12 @@ public class TramiteController {
         return ResponseEntity.ok(Map.of("data", tramites));
     }
 
+    @GetMapping("/cliente/{clienteId}")
+    public ResponseEntity<?> listarTramitesCliente(@PathVariable String clienteId) {
+        List<TramiteDetalladoResponse> tramites = tramiteService.listarTramitesClienteEnriquecidos(clienteId);
+        return ResponseEntity.ok(Map.of("data", tramites));
+    }
+
     @GetMapping("/politica/{politicaId}")
     public ResponseEntity<?> listarPorPolitica(@PathVariable String politicaId) {
         List<Tramite> tramites = tramiteService.listarTramitesPolitica(politicaId);
