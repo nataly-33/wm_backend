@@ -302,8 +302,11 @@ public class AgenteService {
                 // Quitar prefijo tipo "Cliente_" o cualquier "Palabra_" al inicio
                 String nombrePolitica = nombrePoliticaRaw.replaceAll("^[A-Za-z]+_", "");
 
-                String nombreCliente = usuarioRepository.findByEmailAndActivoTrue(conv.getClienteId())
-                        .map(u -> u.getNombre() != null ? u.getNombre().split(" ")[0] : "Cliente")
+                String nombreCliente = usuarioRepository.findById(conv.getClienteId())
+                        .filter(u -> u.getActivo() != null && u.getActivo())
+                        .map(u -> u.getNombre() != null && !u.getNombre().isBlank()
+                                ? u.getNombre().split(" ")[0]
+                                : "Cliente")
                         .orElse("Cliente");
 
                 String nombreTramite = nombreCliente + "_" + nombrePolitica;
@@ -467,7 +470,7 @@ public class AgenteService {
         agregarMensaje(conv, "agente", preguntaConProgreso, "texto");
 
         Map<String, Object> campoMeta = new HashMap<>();
-        campoMeta.put("tipo", campoActual.getTipo() != null ? campoActual.getTipo() : "TEXTO");
+        campoMeta.put("tipo", tipoEfectivoCampo(campoActual));
         campoMeta.put("etiqueta", campoActual.getEtiqueta() != null ? campoActual.getEtiqueta() : campoActual.getNombre());
         campoMeta.put("opciones", campoActual.getOpciones() != null ? campoActual.getOpciones() : new ArrayList<>());
         campoMeta.put("requerido", Boolean.TRUE.equals(campoActual.getRequerido()));
@@ -521,9 +524,28 @@ public class AgenteService {
 
     // ─── Generar pregunta segun tipo de campo ────────────────────────────────
 
+    /**
+     * Devuelve el tipo efectivo del campo.
+     * Si la DB lo almacena como TEXTO pero su nombre contiene palabras clave de fecha
+     * (fecha, disponibilidad, visita, dia, mes, anio) se trata como FECHA para que
+     * el frontend muestre el DatePicker.
+     */
+    private String tipoEfectivoCampo(Formulario.CampoFormulario campo) {
+        String tipo = campo.getTipo() != null ? campo.getTipo() : "TEXTO";
+        if ("TEXTO".equals(tipo) || "TEXTO_CORTO".equals(tipo)) {
+            String nombre = campo.getNombre() != null ? campo.getNombre().toLowerCase() : "";
+            if (nombre.contains("fecha") || nombre.contains("disponibilidad")
+                    || nombre.contains("visita") || nombre.contains("dia")
+                    || nombre.contains("anio")) {
+                return "FECHA";
+            }
+        }
+        return tipo;
+    }
+
     private String generarPreguntaCampo(Formulario.CampoFormulario campo) {
         String etiqueta = campo.getEtiqueta() != null ? campo.getEtiqueta() : campo.getNombre();
-        String tipo = campo.getTipo() != null ? campo.getTipo() : "TEXTO";
+        String tipo = tipoEfectivoCampo(campo);
 
         return switch (tipo) {
             case "TEXTO_CORTO", "TEXTO" ->
@@ -961,28 +983,59 @@ public class AgenteService {
                     conv.setEstado(EstadoConversacion.TRAMITE_EN_PROCESO);
                     conv.setUltimaActividadEn(LocalDateTime.now());
 
-                    String depto = null;
-                    String nombreNodo = null;
-                    if (nodoSiguienteId != null) {
-                        Nodo nodo = nodoRepository.findById(nodoSiguienteId).orElse(null);
-                        if (nodo != null) {
-                            nombreNodo = nodo.getNombre();
-                            if (nodo.getDepartamentoId() != null) {
-                                depto = departamentoRepository.findById(nodo.getDepartamentoId())
-                                        .map(Departamento::getNombre).orElse(null);
+                    String msg;
+
+                    // Intentar obtener nombres de nodos paralelos pendientes desde el tramite
+                    Tramite tramiteParalelo = tramiteRepository.findById(tramiteId).orElse(null);
+                    if (tramiteParalelo != null
+                            && tramiteParalelo.getNodosParalelosPendientes() != null
+                            && !tramiteParalelo.getNodosParalelosPendientes().isEmpty()) {
+
+                        List<String> nombresDeptos = tramiteParalelo.getNodosParalelosPendientes().stream()
+                                .map(nId -> nodoRepository.findById(nId).orElse(null))
+                                .filter(Objects::nonNull)
+                                .map(n -> {
+                                    if (n.getDepartamentoId() == null) return n.getNombre();
+                                    return departamentoRepository.findById(n.getDepartamentoId())
+                                            .map(Departamento::getNombre).orElse(n.getNombre());
+                                })
+                                .distinct()
+                                .collect(Collectors.toList());
+
+                        if (nombresDeptos.size() >= 2) {
+                            String ultimo = nombresDeptos.get(nombresDeptos.size() - 1);
+                            String anteriores = String.join(", ", nombresDeptos.subList(0, nombresDeptos.size() - 1));
+                            msg = "Tu solicitud está siendo procesada simultáneamente por: " + anteriores + " y " + ultimo + ".";
+                        } else if (nombresDeptos.size() == 1) {
+                            msg = "Tu solicitud está siendo procesada por: " + nombresDeptos.get(0) + ".";
+                        } else {
+                            msg = "Tu solicitud está siendo procesada simultáneamente por varios departamentos.";
+                        }
+
+                    } else {
+                        // Sin paralelos: usar el nodo siguiente si está disponible
+                        String depto = null;
+                        String nombreNodo = null;
+                        if (nodoSiguienteId != null) {
+                            Nodo nodo = nodoRepository.findById(nodoSiguienteId).orElse(null);
+                            if (nodo != null) {
+                                nombreNodo = nodo.getNombre();
+                                if (nodo.getDepartamentoId() != null) {
+                                    depto = departamentoRepository.findById(nodo.getDepartamentoId())
+                                            .map(Departamento::getNombre).orElse(null);
+                                }
                             }
+                        }
+
+                        if (depto != null && nombreNodo != null) {
+                            msg = "Tu solicitud avanzó. Ahora está siendo procesada por " + depto + " — " + nombreNodo + ".";
+                        } else if (depto != null) {
+                            msg = "Tu solicitud avanzó. Ahora está siendo procesada por " + depto + ".";
+                        } else {
+                            msg = "Tu solicitud avanzó. El equipo continúa procesándola.";
                         }
                     }
 
-                    // MEJORA 4 — Caso C: mensaje limpio sin redundancia
-                    String msg;
-                    if (depto != null && nombreNodo != null) {
-                        msg = "Tu solicitud avanzó. Ahora está siendo procesada por " + depto + " — " + nombreNodo + ".";
-                    } else if (depto != null) {
-                        msg = "Tu solicitud avanzó. Ahora está siendo procesada por " + depto + ".";
-                    } else {
-                        msg = "Tu solicitud avanzó. El equipo continúa procesándola.";
-                    }
                     agregarMensaje(conv, "agente", msg, "texto");
                     conversacionRepository.save(conv);
                     enviarNotificacionWsCliente(conv, msg);

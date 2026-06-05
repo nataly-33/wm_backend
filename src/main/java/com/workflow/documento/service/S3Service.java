@@ -267,9 +267,8 @@ public class S3Service {
                 boolean faltaDepto = departamento == null || departamento.isBlank() || "documentos".equals(departamento);
                 if (faltaDepto && tramite.getNodoActualId() != null && nodoRepository != null) {
                     Nodo nodo = nodoRepository.findById(tramite.getNodoActualId()).orElse(null);
-                    if (nodo != null && nodo.getDepartamentoId() != null && departamentoRepository != null) {
-                        Departamento depto = departamentoRepository.findById(nodo.getDepartamentoId()).orElse(null);
-                        departamento = depto != null ? depto.getNombre() : nodo.getDepartamentoId();
+                    if (nodo != null && nodo.getDepartamentoId() != null) {
+                        departamento = nodo.getDepartamentoId();
                     }
                 }
             }
