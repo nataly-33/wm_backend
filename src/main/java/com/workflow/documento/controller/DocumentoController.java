@@ -31,7 +31,7 @@ public class DocumentoController {
     private final S3Service s3Service;
     private final UsuarioRepository usuarioRepository;
 
-    @org.springframework.beans.factory.annotation.Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key}")
+    @org.springframework.beans.factory.annotation.Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key-para-evitar-el-error-de-256-bits}")
     private String onlyofficeJwtSecret;
 
     // ── Documentos (colección principal) ────────────────────────────────────

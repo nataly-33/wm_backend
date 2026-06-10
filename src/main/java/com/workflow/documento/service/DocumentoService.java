@@ -42,7 +42,7 @@ public class DocumentoService {
     @Value("${onlyoffice.callback.url:http://localhost:8080/api/v1/onlyoffice/callback/}")
     private String onlyofficeCallbackUrl;
 
-    @Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key}")
+    @Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key-para-evitar-el-error-de-256-bits}")
     private String onlyofficeJwtSecret;
 
     public String getOnlyofficeScriptUrl() {
