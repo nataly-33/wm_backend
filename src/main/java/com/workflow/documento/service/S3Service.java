@@ -152,6 +152,19 @@ public class S3Service {
         return obtenerUrlPublica(key);
     }
 
+    public byte[] descargarBytes(String key) {
+        if (s3Client == null) return null;
+        try {
+            return s3Client.getObjectAsBytes(
+                software.amazon.awssdk.services.s3.model.GetObjectRequest.builder()
+                    .bucket(bucket).key(key).build()
+            ).asByteArray();
+        } catch (Exception e) {
+            log.error("Error descargando desde S3 key={}: {}", key, e.getMessage());
+            return null;
+        }
+    }
+
     public void eliminarArchivo(String key) {
         if (s3Client == null) {
             log.warn("S3Client no configurado. Eliminación simulada para key: {}", key);

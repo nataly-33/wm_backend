@@ -9,6 +9,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Document(collection = "documentos_tramite")
 @Data
@@ -35,4 +37,7 @@ public class DocumentoTramite {
     private String subidoPor;            // userId — puede ser el cliente o el funcionario
     private LlenadoPor subidoPorRol;     // CLIENTE | FUNCIONARIO
     private LocalDateTime subidoEn;
+
+    private Integer version = 1;
+    private List<VersionDocumento> historialVersiones = new ArrayList<>();
 }

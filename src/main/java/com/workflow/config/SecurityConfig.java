@@ -54,8 +54,9 @@ public class SecurityConfig {
                         .requestMatchers("/ws", "/ws/**").permitAll()
                         .requestMatchers("/ws-native", "/ws-native/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                        // OnlyOffice callback — Docker no envía JWT, debe ser público
+                        // OnlyOffice callback y proxy de documentos — Docker no envía JWT, deben ser públicos
                         .requestMatchers(HttpMethod.POST, "/api/v1/onlyoffice/callback/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/v1/documents/proxy/**").permitAll()
                         // Resto protegido
                         .anyRequest().authenticated()
                 )
@@ -73,9 +74,10 @@ public class SecurityConfig {
             "http://localhost:*",
             "http://127.0.0.1:*",
             "http://192.168.*:*",
+            "http://100.49.195.187",
+            "http://100.49.195.187:*",
             "https://white-dune-03a7eaa0f.7.azurestaticapps.net",
             "https://*.onrender.com"
-
         ));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));

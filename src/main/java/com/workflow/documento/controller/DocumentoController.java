@@ -10,6 +10,8 @@ import com.workflow.documento.repository.DocumentoTramiteRepository;
 import com.workflow.documento.service.DocumentoService;
 import com.workflow.documento.service.S3Service;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -31,8 +33,13 @@ public class DocumentoController {
     private final S3Service s3Service;
     private final UsuarioRepository usuarioRepository;
 
-    @org.springframework.beans.factory.annotation.Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key-para-evitar-el-error-de-256-bits}")
+    @Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key-para-evitar-el-error-de-256-bits}")
     private String onlyofficeJwtSecret;
+
+    @Value("${backend.internal.url:http://wm-backend:8080}")
+    private String backendInternalUrl;
+
+    private static final String S3_DYN_PREFIX = "s3_dyn_";
 
     // ── Documentos (colección principal) ────────────────────────────────────
 
@@ -226,7 +233,7 @@ public class DocumentoController {
                 : "docx";
             String base64Key = java.util.Base64.getUrlEncoder().encodeToString(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             return ResponseEntity.ok(Map.of(
-                "id", "s3_dyn_" + base64Key,
+                "id", S3_DYN_PREFIX + base64Key,
                 "nombre", nombreArchivo,
                 "tipoDocumento", ext,
                 "esDocumentoOficina", false,
@@ -256,7 +263,6 @@ public class DocumentoController {
         if (key.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("error", "No se pudo extraer la key de S3 de la URL proporcionada"));
         }
-        String presignedUrl = s3Service.generarUrlPresignada(key, 1440);
         // Determinar nombre y tipo de archivo desde la key
         String nombreArchivo = key.contains("/") ? key.substring(key.lastIndexOf('/') + 1) : key;
         // Quitar timestamp si tiene formato {timestamp}_{nombre}
@@ -272,19 +278,26 @@ public class DocumentoController {
             default                           -> "word";
         };
         // Buscar en DocumentoTramite para obtener metadatos adicionales si está disponible
-        String docId = documentoTramiteRepo.findByUrlS3(url)
+        Optional<com.workflow.documento.model.DocumentoTramite> dtOpt = documentoTramiteRepo.findByUrlS3(url);
+        String docId = dtOpt
             .map(dt -> dt.getId())
-            .orElseGet(() -> "s3_dyn_" + java.util.Base64.getUrlEncoder().encodeToString(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
-        
+            .orElseGet(() -> S3_DYN_PREFIX + java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(key.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+        // Incluir versión en la clave para que OnlyOffice recargue desde S3 al cambiar la versión
+        int docVersion = dtOpt.map(dt -> dt.getVersion() != null ? dt.getVersion() : 1)
+            .orElseGet(() -> documentoService.getS3DynVersion(docId));
+        String docKey = docId + "_v" + docVersion;
+
         String callbackUrl = documentoService.getOnlyofficeCallbackUrl() + docId;
         Map<String, Object> config = new java.util.HashMap<>();
         config.put("scriptUrl", documentoService.getOnlyofficeScriptUrl());
         config.put("documentType", docType);
+        // Usar proxy interno: OnlyOffice (Docker) descarga desde wm-backend, no directamente desde S3
+        String proxyDocUrl = backendInternalUrl + "/api/v1/documents/proxy/tramite/" + docId;
         config.put("document", Map.of(
             "fileType", ext,
-            "key",      docId,
+            "key",      docKey,
             "title",    nombreArchivo,
-            "url",      presignedUrl
+            "url",      proxyDocUrl
         ));
         String userName = usuarioRepository.findById(userId)
             .map(u -> {
@@ -340,5 +353,46 @@ public class DocumentoController {
             .tipoDocumento(doc.getTipoDocumento())
             .build();
         return ResponseEntity.status(201).body(resp);
+    }
+
+    /**
+     * Proxy interno para que OnlyOffice descargue documentos desde wm-backend (Docker network)
+     * en lugar de hacerlo directamente desde S3 con URL presignada (que devuelve 400).
+     *
+     * GET /api/v1/documents/proxy/tramite/{docId}
+     */
+    @GetMapping("/api/v1/documents/proxy/tramite/{docId}")
+    public ResponseEntity<byte[]> proxyDocumentoTramite(@PathVariable String docId) {
+        String s3Key;
+        if (docId.startsWith(S3_DYN_PREFIX)) {
+            String encoded = docId.substring(S3_DYN_PREFIX.length());
+            s3Key = new String(java.util.Base64.getUrlDecoder().decode(encoded), java.nio.charset.StandardCharsets.UTF_8);
+        } else {
+            // Buscar primero en DocumentoTramite, luego en Documento (oficina)
+            com.workflow.documento.model.DocumentoTramite dt = documentoTramiteRepo.findById(docId).orElse(null);
+            if (dt != null) {
+                s3Key = s3Service.extraerKeyDeUrl(dt.getUrlS3());
+            } else {
+                com.workflow.documento.model.Documento doc = documentoRepo.findById(docId).orElse(null);
+                if (doc == null || doc.getUrlArchivo() == null) return ResponseEntity.notFound().build();
+                s3Key = doc.getS3Key() != null ? doc.getS3Key() : s3Service.extraerKeyDeUrl(doc.getUrlArchivo());
+            }
+        }
+        byte[] content = s3Service.descargarBytes(s3Key);
+        if (content == null) return ResponseEntity.notFound().build();
+        String ext = s3Key.contains(".") ? s3Key.substring(s3Key.lastIndexOf('.') + 1).toLowerCase() : "bin";
+        String contentType = switch (ext) {
+            case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+            case "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            case "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+            case "odt"  -> "application/vnd.oasis.opendocument.text";
+            case "ods"  -> "application/vnd.oasis.opendocument.spreadsheet";
+            case "pdf"  -> "application/pdf";
+            default     -> "application/octet-stream";
+        };
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "inline; filename=\"document." + ext + "\"")
+                .contentType(MediaType.parseMediaType(contentType))
+                .body(content);
     }
 }

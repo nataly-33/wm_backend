@@ -35,6 +35,7 @@ public class DocumentoService {
     private final S3Service s3Service;
     private final TramiteRepository tramiteRepo;
     private final com.workflow.documento.repository.DocumentoTramiteRepository documentoTramiteRepo;
+    private final com.workflow.usuario.repository.UsuarioRepository usuarioRepo;
 
     @Value("${onlyoffice.server.url:http://localhost:8088}")
     private String onlyofficeServerUrl;
@@ -44,6 +45,20 @@ public class DocumentoService {
 
     @Value("${onlyoffice.jwt.secret:workflow-onlyoffice-secret-key-para-evitar-el-error-de-256-bits}")
     private String onlyofficeJwtSecret;
+
+    @Value("${backend.internal.url:http://wm-backend:8080}")
+    private String backendInternalUrl;
+
+    private static final java.util.concurrent.ConcurrentHashMap<String, Integer> S3_DYN_VERSIONS =
+        new java.util.concurrent.ConcurrentHashMap<>();
+
+    public int getS3DynVersion(String docId) {
+        return S3_DYN_VERSIONS.getOrDefault(docId, 1);
+    }
+
+    public int incrementS3DynVersion(String docId) {
+        return S3_DYN_VERSIONS.merge(docId, 2, (prev, init) -> prev + 1);
+    }
 
     public String getOnlyofficeScriptUrl() {
         return onlyofficeServerUrl + "/web-apps/apps/api/documents/api.js";
@@ -154,8 +169,19 @@ public class DocumentoService {
         if (documentoId.startsWith("s3_dyn_")) {
             String base64Key = documentoId.substring(7);
             String key = new String(java.util.Base64.getUrlDecoder().decode(base64Key));
-            s3Service.subirBytes(contenido, key, "application/octet-stream");
-            log.info("[Callback] Actualizado archivo raw en S3: {}", key);
+            // Detectar MIME desde la extensión del key
+            String ext2 = key.contains(".") ? key.substring(key.lastIndexOf('.') + 1).toLowerCase() : "bin";
+            String mime = switch (ext2) {
+                case "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                case "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+                case "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+                case "odt"  -> "application/vnd.oasis.opendocument.text";
+                case "pdf"  -> "application/pdf";
+                default     -> "application/octet-stream";
+            };
+            s3Service.subirBytes(contenido, key, mime);
+            incrementS3DynVersion(documentoId);
+            log.info("[Callback] s3_dyn doc {} guardado en S3 key={}, nueva version={}", documentoId, key, getS3DynVersion(documentoId));
             return;
         }
 
@@ -163,8 +189,22 @@ public class DocumentoService {
         if (dtOpt.isPresent()) {
             DocumentoTramite dt = dtOpt.get();
             String key = dt.getS3Key() != null ? dt.getS3Key() : s3Service.extraerKeyDeUrl(dt.getUrlS3());
-            s3Service.subirBytes(contenido, key, "application/octet-stream");
-            log.info("[Callback] Actualizado DocumentoTramite en S3: {}", dt.getId());
+            // Guardar la version anterior en el historial antes de sobrescribir
+            int versionActual = dt.getVersion() != null ? dt.getVersion() : 1;
+            // El nombre del autor de la versión anterior se resuelve desde su userId original
+            String nombreSubidorAnterior = resolverNombreUsuario(dt.getSubidoPor());
+            com.workflow.documento.model.VersionDocumento versionAnterior = com.workflow.documento.model.VersionDocumento.builder()
+                .version(versionActual).urlArchivo(dt.getUrlS3()).s3Key(key)
+                .fechaSubida(dt.getSubidoEn() != null ? dt.getSubidoEn() : LocalDateTime.now())
+                .subidoPorId(dt.getSubidoPor()).subidoPorNombre(nombreSubidorAnterior).tamanioBytes(dt.getTamanioBytes())
+                .build();
+            if (dt.getHistorialVersiones() == null) dt.setHistorialVersiones(new java.util.ArrayList<>());
+            dt.getHistorialVersiones().add(versionAnterior);
+            // Subir el nuevo contenido con la misma key (URL no cambia)
+            s3Service.subirBytes(contenido, key, dt.getTipoMime() != null ? dt.getTipoMime() : "application/octet-stream");
+            dt.setVersion(versionActual + 1);
+            documentoTramiteRepo.save(dt);
+            log.info("[Callback] DocumentoTramite {} actualizado a v{}", dt.getId(), versionActual + 1);
             return;
         }
 
@@ -263,14 +303,13 @@ public class DocumentoService {
         Map<String, Object> config = new HashMap<>();
         config.put("scriptUrl", scriptUrl);
         config.put("documentType", detectarTipoDoc(doc.getTipoMime(), doc.getTipoDocumento()));
-        String s3KeyForUrl = doc.getS3Key() != null ? doc.getS3Key() : s3Service.extraerKeyDeUrl(doc.getUrlArchivo());
-        String presignedUrl = s3Service.generarUrlPresignada(s3KeyForUrl, 1440);
+        String proxyDocUrl = backendInternalUrl + "/api/v1/documents/proxy/tramite/" + documentoId;
 
         config.put("document", Map.of(
             "fileType", extraerExtension(doc.getNombre(), doc.getTipoDocumento()),
             "key", documentoId + "_v" + doc.getVersion(),
             "title", doc.getNombre(),
-            "url", presignedUrl
+            "url", proxyDocUrl
         ));
         config.put("editorConfig", Map.of(
             "callbackUrl", callbackUrl,
@@ -413,6 +452,17 @@ public class DocumentoService {
         auditoriaRepo.save(AuditoriaDocumento.builder()
             .documentoId(docId).usuarioId(userId).usuarioNombre(nombre)
             .accion(accion).detalles(detalle).fechaHora(LocalDateTime.now()).build());
+    }
+
+    /** Resuelve el nombre legible de un usuario a partir de su ID. Devuelve el ID si no se encuentra. */
+    String resolverNombreUsuario(String userId) {
+        if (userId == null || userId.isBlank()) return "—";
+        return usuarioRepo.findById(userId)
+            .map(u -> {
+                String nombre = u.getNombre();
+                return (nombre != null && !nombre.isBlank()) ? nombre : u.getEmail();
+            })
+            .orElse(userId);
     }
 
     private DocumentoResponse mapToResponse(Documento doc) {
