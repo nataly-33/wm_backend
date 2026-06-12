@@ -16,4 +16,5 @@ public class CampoRellenadoDto {
     private Object valor;
     private boolean esArchivo;
     private boolean esTablaGrid;
+    private Integer versionArchivo;
 }

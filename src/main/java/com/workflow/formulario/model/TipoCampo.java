@@ -8,7 +8,8 @@ public enum TipoCampo {
     FECHA,
     SELECTOR,        // desplegable
     RADIO,           // botones de opción
-    CHECKBOX,        // casillas múltiples
+    CHECKBOX,        // casillas múltiples (opciones predefinidas)
+    LISTA,           // lista dinámica de ítems que el usuario agrega
     ARCHIVO,
     IMAGEN,
     TABLA_GRID       // grilla de datos tabulares

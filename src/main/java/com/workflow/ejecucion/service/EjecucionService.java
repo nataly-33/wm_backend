@@ -2,6 +2,7 @@ package com.workflow.ejecucion.service;
 
 import com.workflow.departamento.model.Departamento;
 import com.workflow.departamento.repository.DepartamentoRepository;
+import com.workflow.documento.repository.DocumentoTramiteRepository;
 import com.workflow.ejecucion.dto.CampoRellenadoDto;
 import com.workflow.ejecucion.dto.EjecucionDetalladaResponse;
 import com.workflow.ejecucion.dto.FormularioRellenadoResponse;
@@ -44,6 +45,7 @@ public class EjecucionService {
     private final DepartamentoRepository departamentoRepository;
     private final FormularioRepository formularioRepository;
     private final UsuarioRepository usuarioRepository;
+    private final DocumentoTramiteRepository documentoTramiteRepository;
 
     public List<EjecucionNodo> listarPorDepartamento(String departamentoId) {
         return ejecucionNodoRepository.findByDepartamentoIdAndEstadoIn(
@@ -376,6 +378,12 @@ public class EjecucionService {
                     Object valor = respuestas.get(c.getNombre());
                     boolean esArchivo = "ARCHIVO".equals(c.getTipo()) || "IMAGEN".equals(c.getTipo());
                     boolean esTablaGrid = "TABLA_GRID".equals(c.getTipo()) || "GRID".equals(c.getTipo());
+                    Integer versionArchivo = null;
+                    if (esArchivo && valor instanceof String url && !url.isBlank()) {
+                        versionArchivo = documentoTramiteRepository.findByUrlS3(url)
+                            .map(dt -> dt.getVersion() != null ? dt.getVersion() : 1)
+                            .orElse(null);
+                    }
                     return CampoRellenadoDto.builder()
                             .nombre(c.getNombre())
                             .etiqueta(c.getEtiqueta() != null ? c.getEtiqueta() : c.getNombre())
@@ -383,6 +391,7 @@ public class EjecucionService {
                             .valor(valor)
                             .esArchivo(esArchivo)
                             .esTablaGrid(esTablaGrid)
+                            .versionArchivo(versionArchivo)
                             .build();
                 })
                 .toList();
