@@ -1,0 +1,17 @@
+services:
+  onlyoffice:
+    image: onlyoffice/documentserver:latest
+    container_name: wm-onlyoffice
+    ports:
+      - "8088:80"
+    environment:
+    #  - JWT_ENABLED=false
+      # - JWT_SECRET=wm-onlyoffice-secret-key-2026  # Habilitar en producción con JWT_ENABLED=true
+    volumes:
+      - onlyoffice_data:/var/www/onlyoffice/Data
+      - onlyoffice_log:/var/log/onlyoffice
+    restart: unless-stopped
+
+volumes:
+  onlyoffice_data:
+  onlyoffice_log:
